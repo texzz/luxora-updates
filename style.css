@@ -6,7 +6,7 @@
 /* ── Local Custom Fonts ── */
 @font-face {
   font-family: 'Agraham';
-  src: url('/Agraham.otf') format('opentype');
+  src: url('Agraham.otf') format('opentype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -14,7 +14,7 @@
 
 @font-face {
   font-family: 'Mileast Italic';
-  src: url('/Mileast Italic.otf') format('opentype');
+  src: url('Mileast Italic.otf') format('opentype');
   font-weight: normal;
   font-style: italic;
   font-display: swap;
