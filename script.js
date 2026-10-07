@@ -55,8 +55,8 @@ let modalUploading = false;
 let amountModalCtx  = null;   // { collection, docId, field, start, unit, name, step }
 
 /* ───────── DATE PICKER STATE ───────── */
-let datePickerTarget = null;  // input element that receives the chosen date
-let datePickerView   = new Date();  // current month being viewed
+let datePickerTarget = null;
+let datePickerView   = new Date();
 
 /* ───────── CONFIRM MODAL STATE ───────── */
 let confirmCallback = null;
@@ -387,13 +387,73 @@ function closeLightbox() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   GITHUB IMAGE DELETE
+   Removes a file from the GitHub repo using its path + SHA.
+   Accepts "ghapi:uploads/todo/1234_foo.png".
+   Silently no-ops for external URLs and empty values.
+════════════════════════════════════════════════════════════ */
+async function deleteImageFromGitHub(ref) {
+  if (!ref) return false;
+  if (!githubConfig) return false;
+  if (!ref.startsWith("ghapi:")) return false;
+
+  const path = ref.replace("ghapi:", "").trim();
+  if (!path) return false;
+
+  const { token, owner, repo, branch } = githubConfig;
+
+  // 1. Fetch file to get its SHA
+  const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+  const getRes = await fetch(getUrl, {
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/vnd.github+json"
+    }
+  });
+
+  // If file is already gone → treat as success
+  if (getRes.status === 404) return true;
+
+  if (!getRes.ok) {
+    const err = await getRes.json().catch(() => ({}));
+    throw new Error(err.message || `GitHub GET failed (${getRes.status})`);
+  }
+
+  const fileData = await getRes.json();
+  const sha = fileData.sha;
+  if (!sha) throw new Error("No SHA returned for file");
+
+  // 2. Delete the file
+  const delUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const delRes = await fetch(delUrl, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/vnd.github+json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      message: `Delete ${path}`,
+      sha,
+      branch
+    })
+  });
+
+  if (!delRes.ok) {
+    const err = await delRes.json().catch(() => ({}));
+    throw new Error(err.message || `GitHub DELETE failed (${delRes.status})`);
+  }
+
+  return true;
+}
+
+/* ════════════════════════════════════════════════════════════
    CUSTOM DATE PICKER
 ════════════════════════════════════════════════════════════ */
 function openDatePicker(inputEl) {
   if (!inputEl) return;
   datePickerTarget = inputEl;
 
-  // Set initial view to the input's current value or today
   const current = inputEl.value ? new Date(inputEl.value) : new Date();
   datePickerView = isNaN(current.getTime()) ? new Date() : current;
 
@@ -444,13 +504,11 @@ function renderDatePicker() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  // Today's Y/M/D for highlight
   const today = new Date();
   const todayY = today.getFullYear();
   const todayM = today.getMonth();
   const todayD = today.getDate();
 
-  // Selected (from target input)
   let selY = null, selM = null, selD = null;
   if (datePickerTarget && datePickerTarget.value) {
     const sel = new Date(datePickerTarget.value);
@@ -462,11 +520,9 @@ function renderDatePicker() {
   }
 
   let html = "";
-  // Blank cells for days before the 1st
   for (let i = 0; i < firstDay; i++) {
     html += `<div class="date-picker-day empty"></div>`;
   }
-  // Day cells
   for (let d = 1; d <= daysInMonth; d++) {
     const isToday    = (todayY === year && todayM === month && todayD === d);
     const isSelected = (selY === year && selM === month && selD === d);
@@ -518,8 +574,6 @@ function confirmConfirmModal() {
 
 /* ════════════════════════════════════════════════════════════
    AMOUNT MODAL — generic +/− prompt
-   ctx = { collection, docId, field, start, unit, name, step }
-   unit: 'ml' | 'qty'
 ════════════════════════════════════════════════════════════ */
 function openAmountModal(ctx, direction) {
   amountModalCtx = { ...ctx, direction };
@@ -668,7 +722,7 @@ async function renderTodo() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — BOTTLES (with card +/−)
+   RENDER — BOTTLES
 ════════════════════════════════════════════════════════════ */
 async function renderBottles() {
   const grid = document.getElementById("bottleGrid");
@@ -712,7 +766,7 @@ async function renderBottles() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — TESTERS (with card +/−)
+   RENDER — TESTERS
 ════════════════════════════════════════════════════════════ */
 async function renderTesters() {
   const grid = document.getElementById("testerGrid");
@@ -797,7 +851,7 @@ async function renderChanges() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — FRAGRANCES (with card +/− on quantity)
+   RENDER — FRAGRANCES
 ════════════════════════════════════════════════════════════ */
 function switchFragTab(tab, el) {
   currentFragTab = tab;
@@ -860,7 +914,7 @@ function fragCollection(tab) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — ETHANOL (with card +/−)
+   RENDER — ETHANOL
 ════════════════════════════════════════════════════════════ */
 async function renderEthonol() {
   const grid = document.getElementById("ethonolGrid");
@@ -906,19 +960,35 @@ async function renderEthonol() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   DELETE — custom confirm
+   DELETE — custom confirm + GitHub image cleanup
 ════════════════════════════════════════════════════════════ */
 function confirmDelete(colName, id, label = "item") {
   const cap = label.charAt(0).toUpperCase() + label.slice(1);
   openConfirmModal(
     "Delete " + cap + "?",
-    "This will permanently delete this " + label + ". This action cannot be undone.",
+    "This will permanently delete this " + label + " (and its image from GitHub). This action cannot be undone.",
     async () => {
       const removed = findItemByCollection(colName, id);
+
+      // 1. Try to delete the image from GitHub first (if any)
+      if (removed && removed.image) {
+        try {
+          await deleteImageFromGitHub(removed.image);
+        } catch (imgErr) {
+          console.warn("Image delete failed (continuing with doc delete):", imgErr);
+        }
+      }
+
+      // 2. Delete the Firestore doc
       try {
         await deleteDoc(doc(db, colName, id));
         showToast("Deleted ✅", "success");
-        notifyChange({ collection: colName, action: "deleted", item: itemLabel(removed) || cap, details: describeFields(removed || {}) });
+        notifyChange({
+          collection: colName,
+          action: "deleted",
+          item: itemLabel(removed) || cap,
+          details: describeFields(removed || {})
+        });
       } catch (err) {
         console.error(err);
         showToast("Delete failed: " + err.message, "error");
@@ -961,13 +1031,13 @@ async function openModal(section, id = null) {
   } else if (section === "bottle") {
     titleText = id ? "Edit Bottle" : "Add Bottle";
     fields = [
-      { key: "name",         label: "Name *",        type: "text",   value: currentItem?.name || "" },
-      { key: "brand",        label: "Brand",         type: "text",   value: currentItem?.brand || "" },
-      { key: "size",         label: "Size (ml)",     type: "select", value: currentItem?.size || "50",
+      { key: "name",         label: "Name *",        type: "text",     value: currentItem?.name || "" },
+      { key: "brand",        label: "Brand",         type: "text",     value: currentItem?.brand || "" },
+      { key: "size",         label: "Size (ml)",     type: "select",   value: currentItem?.size || "50",
         options: ["20","30","50","100"],
         optionLabels: { "20": "20 ml", "30": "30 ml", "50": "50 ml", "100": "100 ml" } },
-      { key: "quantity",     label: "Quantity",      type: "qty",    value: currentItem?.quantity || 1 },
-      { key: "purchaseDate", label: "Purchase Date", type: "date",   value: currentItem?.purchaseDate || "" },
+      { key: "quantity",     label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
+      { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
       { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
     ];
   } else if (section === "tester") {
@@ -1212,6 +1282,16 @@ async function saveModal() {
         const snapBefore = await getDoc(doc(db, targetCollection, modalEditId));
         if (snapBefore.exists()) before = snapBefore.data();
       } catch (_) {}
+
+      // If editing and the image was replaced, delete the old file from GitHub
+      if (before && before.image && before.image !== data.image) {
+        try {
+          await deleteImageFromGitHub(before.image);
+        } catch (imgErr) {
+          console.warn("Old image delete failed:", imgErr);
+        }
+      }
+
       await setDoc(doc(db, targetCollection, modalEditId), data, { merge: true });
       showToast("Saved ✅", "success");
       const changed = diffFields(before, data);
@@ -1277,11 +1357,8 @@ function exportAllExcel() {
 
 /* ════════════════════════════════════════════════════════════
    CUSTOM DROPDOWNS
-   Replaces the browser-default <select> menu with an app-styled one.
-   The real <select> stays in the DOM (hidden) so data-key / .value /
-   inline onchange handlers keep working exactly as before.
 ════════════════════════════════════════════════════════════ */
-let openCSelect = null;   // { wrap, btn, menu, sel, active }
+let openCSelect = null;
 
 function enhanceAllSelects(root) {
   (root || document).querySelectorAll("select").forEach(enhanceSelect);
@@ -1369,7 +1446,6 @@ function openCSelectMenu(wrap, sel, btn, refreshLabel) {
 
   document.body.appendChild(menu);
 
-  // keep inside the viewport horizontally
   const overflow = r.left + menu.offsetWidth - (window.innerWidth - 8);
   if (overflow > 0) menu.style.left = Math.max(8, r.left - overflow) + "px";
 
@@ -1433,15 +1509,12 @@ function cselectOutside(e) {
 }
 
 function cselectScroll(e) {
-  if (openCSelect && openCSelect.menu.contains(e.target)) return;   // scrolling the menu itself
+  if (openCSelect && openCSelect.menu.contains(e.target)) return;
   closeCSelect();
 }
 
 /* ════════════════════════════════════════════════════════════
    EMAIL NOTIFICATIONS
-   Every add / edit / delete / stock +− sends one plain-text email
-   to the three partners through the Apps Script relay.
-   Fire-and-forget: it never blocks or breaks the app.
 ════════════════════════════════════════════════════════════ */
 const COLLECTION_LABELS = {
   todo_items:      "To-Do List",
@@ -1529,7 +1602,6 @@ async function notifyChange(info) {
                   label: d.label, value: String(d.value).slice(0, 300) })),
       ts:       Date.now()
     };
-    // text/plain + no-cors = a "simple request", so the browser sends it without a CORS preflight
     await fetch(NOTIFY_CONFIG.url, {
       method: "POST",
       mode: "no-cors",
@@ -1556,7 +1628,6 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
-/* For inline onclick attribute strings — safe single-quoted value */
 function escapeAttr(s) {
   if (s == null) return "";
   return String(s)
@@ -1622,3 +1693,4 @@ window.renderTesters          = renderTesters;
 window.renderChanges          = renderChanges;
 window.renderFrags            = renderFrags;
 window.renderEthonol          = renderEthonol;
+window.deleteImageFromGitHub  = deleteImageFromGitHub;
