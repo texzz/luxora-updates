@@ -1,6 +1,7 @@
 /* ════════════════════════════════════════════════════════════
    LUXORA UPDATES — script.js
-   Sections: To-Do · Bottles · Testers · Changes · Fragrances · Ethanol
+   Sections: To-Do · Changes · Expenses · Fragrances · Ethanol ·
+             Perfume Bottles · Testers · Boxes · Labels · Packaging
    Data: Firestore · Images: GitHub (public repo via raw URLs)
 ════════════════════════════════════════════════════════════ */
 
@@ -19,13 +20,10 @@ const NAME_MAP = {
 
 let currentUser = null;
 
-/* ───────── EMAIL NOTIFICATIONS (Google Apps Script relay) ─────────
-   1. Deploy email-notifier.gs as a Web App (steps are inside that file).
-   2. Paste the Web App URL (ends with /exec) and the SAME secret key below.
-   Leave url empty to switch notifications off.                          */
+/* ───────── EMAIL NOTIFICATIONS ───────── */
 const NOTIFY_CONFIG = {
-  url: "https://script.google.com/macros/s/AKfycbyBO7FsKOh62Py3lWbJLrn6BmDR_23Mjg1zMCuHVsDTLdmZ1tbsEHHC29_QEYMqXZk/exec",   // e.g. "https://script.google.com/macros/s/AKfycb.../exec"
-  key: "Lx9-kP2mQ7vTz4Rw8Nb3"    // must match SHARED_KEY inside email-notifier.gs
+  url: "https://script.google.com/macros/s/AKfycbyBO7FsKOh62Py3lWbJLrn6BmDR_23Mjg1zMCuHVsDTLdmZ1tbsEHHC29_QEYMqXZk/exec",
+  key: "Lx9-kP2mQ7vTz4Rw8Nb3"
 };
 
 /* ───────── FIREBASE REFS ───────── */
@@ -33,26 +31,34 @@ let db, collection, getDocs, doc, setDoc, deleteDoc, addDoc,
     onSnapshot, query, orderBy, getDoc, updateDoc;
 
 /* ───────── APP STATE ───────── */
-let todoItems    = [];
-let bottles      = [];
-let testers      = [];
-let changes      = [];
-let fragHave     = [];
-let fragAdd      = [];
-let fragRemove   = [];
-let ethonolItems = [];
+let todoItems       = [];
+let changes         = [];
+let expenseItems    = [];
+let fragHave        = [];
+let fragAdd         = [];
+let fragRemove      = [];
+let ethonolItems    = [];
+let bottles         = [];
+let testers         = [];
+let boxItems        = [];
+let labelItems      = [];
+let packagingItems  = [];
 
-let currentFragTab = "have";
-let githubConfig   = null;
+let currentFragTab      = "have";
+let currentBoxTab       = "testers";
+let currentLabelTab     = "testers";
+let currentPackagingTab = "bubble";
 
-/* ───────── GENERIC MODAL STATE ───────── */
+let githubConfig = null;
+
+/* ───────── MODAL STATE ───────── */
 let modalSection   = null;
 let modalEditId    = null;
 let modalImageUrl  = "";
 let modalUploading = false;
 
 /* ───────── AMOUNT MODAL STATE ───────── */
-let amountModalCtx  = null;   // { collection, docId, field, start, unit, name, step }
+let amountModalCtx  = null;
 
 /* ───────── DATE PICKER STATE ───────── */
 let datePickerTarget = null;
@@ -214,13 +220,17 @@ async function saveGithubSetup() {
 async function initCollections() {
   const required = [
     "todo_items",
-    "perfume_bottles",
-    "testers",
     "new_changes",
+    "expenses_items",
     "frag_have",
     "frag_add",
     "frag_remove",
-    "ethonol_items"
+    "ethonol_items",
+    "perfume_bottles",
+    "testers",
+    "boxes_testers", "boxes_20ml", "boxes_50ml", "boxes_100ml", "boxes_combo",
+    "labels_testers", "labels_20ml", "labels_50ml", "labels_100ml", "labels_card", "labels_sticker",
+    "packaging_bubble", "packaging_bag", "packaging_paper"
   ];
   for (const colName of required) {
     try {
@@ -256,14 +266,29 @@ function setupRealtimeListeners() {
     });
   };
 
-  bind("todo_items",      v => todoItems    = v, renderTodo);
-  bind("perfume_bottles", v => bottles      = v, renderBottles);
-  bind("testers",         v => testers      = v, renderTesters);
-  bind("new_changes",     v => changes      = v, renderChanges);
-  bind("frag_have",       v => fragHave     = v, renderFrags);
-  bind("frag_add",        v => fragAdd      = v, renderFrags);
-  bind("frag_remove",     v => fragRemove   = v, renderFrags);
-  bind("ethonol_items",   v => ethonolItems = v, renderEthonol);
+  bind("todo_items",       v => todoItems      = v, renderTodo);
+  bind("new_changes",      v => changes        = v, renderChanges);
+  bind("expenses_items",   v => expenseItems   = v, renderExpenses);
+  bind("frag_have",        v => fragHave       = v, renderFrags);
+  bind("frag_add",         v => fragAdd        = v, renderFrags);
+  bind("frag_remove",      v => fragRemove     = v, renderFrags);
+  bind("ethonol_items",    v => ethonolItems   = v, renderEthonol);
+  bind("perfume_bottles",  v => bottles        = v, renderBottles);
+  bind("testers",          v => testers        = v, renderTesters);
+  bind("boxes_testers",    v => boxItems       = v, renderBoxes);
+  bind("boxes_20ml",       v => boxItems       = v, renderBoxes);
+  bind("boxes_50ml",       v => boxItems       = v, renderBoxes);
+  bind("boxes_100ml",      v => boxItems       = v, renderBoxes);
+  bind("boxes_combo",      v => boxItems       = v, renderBoxes);
+  bind("labels_testers",   v => labelItems     = v, renderLabels);
+  bind("labels_20ml",      v => labelItems     = v, renderLabels);
+  bind("labels_50ml",      v => labelItems     = v, renderLabels);
+  bind("labels_100ml",     v => labelItems     = v, renderLabels);
+  bind("labels_card",      v => labelItems     = v, renderLabels);
+  bind("labels_sticker",   v => labelItems     = v, renderLabels);
+  bind("packaging_bubble", v => packagingItems = v, renderPackaging);
+  bind("packaging_bag",    v => packagingItems = v, renderPackaging);
+  bind("packaging_paper",  v => packagingItems = v, renderPackaging);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -303,7 +328,7 @@ function renderStats() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   UTIL — ML / L FORMATTING
+   UTIL — ML / L FORMATTING · ₹ FORMATTING
 ════════════════════════════════════════════════════════════ */
 function formatMl(value) {
   const n = Number(value) || 0;
@@ -314,8 +339,13 @@ function formatMl(value) {
   return `${str} L`;
 }
 
+function formatRupees(value) {
+  const n = Number(value) || 0;
+  return "₹" + n.toLocaleString("en-IN");
+}
+
 /* ════════════════════════════════════════════════════════════
-   GITHUB IMAGE UPLOAD
+   GITHUB IMAGE UPLOAD / DELETE
 ════════════════════════════════════════════════════════════ */
 async function uploadImageToGitHub(file, sectionFolder) {
   if (!githubConfig) throw new Error("GitHub not configured");
@@ -335,11 +365,7 @@ async function uploadImageToGitHub(file, sectionFolder) {
       "Accept": "application/vnd.github+json",
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      message: `Upload ${path}`,
-      content,
-      branch
-    })
+    body: JSON.stringify({ message: `Upload ${path}`, content, branch })
   });
 
   if (!res.ok) {
@@ -386,12 +412,6 @@ function closeLightbox() {
   document.getElementById("imgLightbox").style.display = "none";
 }
 
-/* ════════════════════════════════════════════════════════════
-   GITHUB IMAGE DELETE
-   Removes a file from the GitHub repo using its path + SHA.
-   Accepts "ghapi:uploads/todo/1234_foo.png".
-   Silently no-ops for external URLs and empty values.
-════════════════════════════════════════════════════════════ */
 async function deleteImageFromGitHub(ref) {
   if (!ref) return false;
   if (!githubConfig) return false;
@@ -402,7 +422,6 @@ async function deleteImageFromGitHub(ref) {
 
   const { token, owner, repo, branch } = githubConfig;
 
-  // 1. Fetch file to get its SHA
   const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
   const getRes = await fetch(getUrl, {
     headers: {
@@ -411,7 +430,6 @@ async function deleteImageFromGitHub(ref) {
     }
   });
 
-  // If file is already gone → treat as success
   if (getRes.status === 404) return true;
 
   if (!getRes.ok) {
@@ -423,7 +441,6 @@ async function deleteImageFromGitHub(ref) {
   const sha = fileData.sha;
   if (!sha) throw new Error("No SHA returned for file");
 
-  // 2. Delete the file
   const delUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const delRes = await fetch(delUrl, {
     method: "DELETE",
@@ -432,11 +449,7 @@ async function deleteImageFromGitHub(ref) {
       "Accept": "application/vnd.github+json",
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      message: `Delete ${path}`,
-      sha,
-      branch
-    })
+    body: JSON.stringify({ message: `Delete ${path}`, sha, branch })
   });
 
   if (!delRes.ok) {
@@ -471,19 +484,14 @@ function datePickerPrevMonth() {
   datePickerView.setMonth(datePickerView.getMonth() - 1);
   renderDatePicker();
 }
-
 function datePickerNextMonth() {
   datePickerView.setMonth(datePickerView.getMonth() + 1);
   renderDatePicker();
 }
-
 function datePickerToday() {
-  if (datePickerTarget) {
-    datePickerTarget.value = new Date().toISOString().split("T")[0];
-  }
+  if (datePickerTarget) datePickerTarget.value = new Date().toISOString().split("T")[0];
   closeDatePicker();
 }
-
 function datePickerClear() {
   if (datePickerTarget) datePickerTarget.value = "";
   closeDatePicker();
@@ -497,8 +505,7 @@ function renderDatePicker() {
   const month = datePickerView.getMonth();
 
   monthEl.textContent = new Date(year, month, 1).toLocaleDateString("en-IN", {
-    month: "long",
-    year: "numeric"
+    month: "long", year: "numeric"
   });
 
   const firstDay = new Date(year, month, 1).getDay();
@@ -520,9 +527,7 @@ function renderDatePicker() {
   }
 
   let html = "";
-  for (let i = 0; i < firstDay; i++) {
-    html += `<div class="date-picker-day empty"></div>`;
-  }
+  for (let i = 0; i < firstDay; i++) html += `<div class="date-picker-day empty"></div>`;
   for (let d = 1; d <= daysInMonth; d++) {
     const isToday    = (todayY === year && todayM === month && todayD === d);
     const isSelected = (selY === year && selM === month && selD === d);
@@ -535,11 +540,7 @@ function renderDatePicker() {
 }
 
 function datePickerPick(y, m, d) {
-  const yyyy = y;
-  const mm   = String(m + 1).padStart(2, "0");
-  const dd   = String(d).padStart(2, "0");
-  const iso  = `${yyyy}-${mm}-${dd}`;
-
+  const iso = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   if (datePickerTarget) datePickerTarget.value = iso;
   closeDatePicker();
 }
@@ -722,94 +723,6 @@ async function renderTodo() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — BOTTLES
-════════════════════════════════════════════════════════════ */
-async function renderBottles() {
-  const grid = document.getElementById("bottleGrid");
-  if (!grid) return;
-  const q = (document.getElementById("bottleSearch")?.value || "").toLowerCase();
-  const list = bottles.filter(b =>
-    !q || (b.name||"").toLowerCase().includes(q) || (b.brand||"").toLowerCase().includes(q)
-  );
-
-  grid.innerHTML = "";
-  if (list.length === 0) {
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No bottles yet — click "＋ Add Bottle"</div>`;
-    return;
-  }
-
-  for (const b of list) {
-    const src = await resolveImageSrc(b.image);
-    const qty = Number(b.quantity) || 0;
-    const card = document.createElement("div");
-    card.className = "frag-card";
-    card.innerHTML = `
-      ${src
-        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
-        : `<div class="frag-card-emoji">🧴</div>`}
-      <div class="frag-card-name">${escapeHtml(b.name || "Unnamed")}</div>
-      <div style="font-size:0.68rem;color:var(--text3)">${escapeHtml(b.brand||"")}${b.size ? " · "+b.size+"ml" : ""}</div>
-      <div class="frag-stock-pill good">Qty: ${qty}</div>
-      <div class="card-actions">
-        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'perfume_bottles',docId:'${b.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(b.name||"Bottle")}'},-1)">−</button>
-        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'perfume_bottles',docId:'${b.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(b.name||"Bottle")}'},1)">+</button>
-        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('bottle','${b.id}')" title="Edit">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('perfume_bottles','${b.id}','bottle')" title="Delete">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-        </button>
-      </div>
-    `;
-    grid.appendChild(card);
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   RENDER — TESTERS
-════════════════════════════════════════════════════════════ */
-async function renderTesters() {
-  const grid = document.getElementById("testerGrid");
-  if (!grid) return;
-  const q = (document.getElementById("testerSearch")?.value || "").toLowerCase();
-  const list = testers.filter(t =>
-    !q || (t.name||"").toLowerCase().includes(q) || (t.brand||"").toLowerCase().includes(q)
-  );
-
-  grid.innerHTML = "";
-  if (list.length === 0) {
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No testers yet — click "＋ Add Tester"</div>`;
-    return;
-  }
-
-  for (const t of list) {
-    const src = await resolveImageSrc(t.image);
-    const qty = Number(t.quantity) || 0;
-    const card = document.createElement("div");
-    card.className = "frag-card";
-    card.innerHTML = `
-      ${src
-        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
-        : `<div class="frag-card-emoji">💧</div>`}
-      <div class="frag-card-name">${escapeHtml(t.name || "Unnamed")}</div>
-      <div style="font-size:0.68rem;color:var(--text3)">${escapeHtml(t.brand||"")}${t.location ? " · "+t.location : ""}</div>
-      <div class="frag-stock-pill good">Qty: ${qty}</div>
-      <div class="card-actions">
-        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'testers',docId:'${t.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(t.name||"Tester")}'},-1)">−</button>
-        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'testers',docId:'${t.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(t.name||"Tester")}'},1)">+</button>
-        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('tester','${t.id}')" title="Edit">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('testers','${t.id}','tester')" title="Delete">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-        </button>
-      </div>
-    `;
-    grid.appendChild(card);
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
    RENDER — CHANGES
 ════════════════════════════════════════════════════════════ */
 async function renderChanges() {
@@ -851,7 +764,60 @@ async function renderChanges() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — FRAGRANCES
+   RENDER — EXPENSES
+════════════════════════════════════════════════════════════ */
+async function renderExpenses() {
+  const grid = document.getElementById("expenseGrid");
+  if (!grid) return;
+  const q = (document.getElementById("expenseSearch")?.value || "").toLowerCase();
+  const list = expenseItems.filter(e =>
+    !q || (e.title||"").toLowerCase().includes(q)
+  );
+
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No expenses yet — click "＋ Add Expense"</div>`;
+    return;
+  }
+
+  for (const e of list) {
+    const src = await resolveImageSrc(e.image);
+    const isOnline = (e.payment || "").toLowerCase().includes("online");
+    const statusGood = (e.status || "").toUpperCase() === "DONE";
+    const priClass = e.priority === "HIGH" ? "out" : e.priority === "MEDIUM" ? "low" : "good";
+
+    const card = document.createElement("div");
+    card.className = "frag-card";
+    card.innerHTML = `
+      ${src
+        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
+        : `<div class="frag-card-emoji">💸</div>`}
+      <div class="frag-card-name">${escapeHtml(e.title || "Untitled")}</div>
+      <div style="font-family:var(--font-serif);font-style:italic;font-size:1.15rem;color:var(--gold);margin:4px 0">
+        ${formatRupees(e.amount || 0)}
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center">
+        <span class="status-badge ${isOnline ? "info" : "good"}">${isOnline ? "Online" : "Cash"}</span>
+        <span class="status-badge ${statusGood ? "good" : "low"}">${e.status || "PENDING"}</span>
+        <span class="status-badge ${priClass}">${e.priority || "MEDIUM"}</span>
+      </div>
+      ${e.date ? `<div style="font-size:0.66rem;color:var(--text3)">Date: ${e.date}</div>` : ""}
+      ${e.notes ? `<div style="font-size:0.66rem;color:var(--text3);line-height:1.3">${escapeHtml(e.notes)}</div>` : ""}
+      <div class="card-actions">
+        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('expense','${e.id}')" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('expenses_items','${e.id}','expense')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER — FRAGRANCES (with Purchase Date)
 ════════════════════════════════════════════════════════════ */
 function switchFragTab(tab, el) {
   currentFragTab = tab;
@@ -894,6 +860,7 @@ async function renderFrags() {
       <div class="frag-card-name">${escapeHtml(f.name || "Unnamed")}</div>
       <div style="font-size:0.68rem;color:var(--text3)">${escapeHtml(f.brand||"")}${f.sizes ? " · "+f.sizes : ""}</div>
       <div class="frag-stock-pill ${badgeColor}">${badgeLabel} · Qty: ${qty}</div>
+      ${f.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${f.purchaseDate}</div>` : ""}
       <div class="card-actions">
         <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${f.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(f.name||"Fragrance")}'},-1)">−</button>
         <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${f.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(f.name||"Fragrance")}'},1)">+</button>
@@ -914,15 +881,13 @@ function fragCollection(tab) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — ETHANOL
+   RENDER — ETHANOL (with Purchase Date)
 ════════════════════════════════════════════════════════════ */
 async function renderEthonol() {
   const grid = document.getElementById("ethonolGrid");
   if (!grid) return;
   const q = (document.getElementById("ethonolSearch")?.value || "").toLowerCase();
-  const list = ethonolItems.filter(e =>
-    !q || (e.name||"").toLowerCase().includes(q)
-  );
+  const list = ethonolItems.filter(e => !q || (e.name||"").toLowerCase().includes(q));
 
   grid.innerHTML = "";
   if (list.length === 0) {
@@ -943,6 +908,7 @@ async function renderEthonol() {
       <div style="font-family:var(--font-serif);font-style:italic;font-size:1.15rem;color:var(--gold);margin:4px 0">
         ${formatMl(currentMl)}
       </div>
+      ${e.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${e.purchaseDate}</div>` : ""}
       ${e.notes ? `<div style="font-size:0.66rem;color:var(--text3);line-height:1.3">${escapeHtml(e.notes)}</div>` : ""}
       <div class="card-actions">
         <button class="card-minus-btn" title="Log usage" onclick="event.stopPropagation();openAmountModal({collection:'ethonol_items',docId:'${e.id}',field:'ml',start:${currentMl},unit:'ml',name:'${escapeAttr(e.name||"Ethanol")}'},-1)">−</button>
@@ -960,6 +926,271 @@ async function renderEthonol() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   RENDER — BOTTLES
+════════════════════════════════════════════════════════════ */
+async function renderBottles() {
+  const grid = document.getElementById("bottleGrid");
+  if (!grid) return;
+  const q = (document.getElementById("bottleSearch")?.value || "").toLowerCase();
+  const list = bottles.filter(b =>
+    !q || (b.name||"").toLowerCase().includes(q) || (b.brand||"").toLowerCase().includes(q)
+  );
+
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No bottles yet — click "＋ Add Bottle"</div>`;
+    return;
+  }
+
+  for (const b of list) {
+    const src = await resolveImageSrc(b.image);
+    const qty = Number(b.quantity) || 0;
+    const card = document.createElement("div");
+    card.className = "frag-card";
+    card.innerHTML = `
+      ${src
+        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
+        : `<div class="frag-card-emoji">🧴</div>`}
+      <div class="frag-card-name">${escapeHtml(b.name || "Unnamed")}</div>
+      <div style="font-size:0.68rem;color:var(--text3)">${escapeHtml(b.brand||"")}${b.size ? " · "+b.size+"ml" : ""}</div>
+      <div class="frag-stock-pill good">Qty: ${qty}</div>
+      ${b.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${b.purchaseDate}</div>` : ""}
+      <div class="card-actions">
+        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'perfume_bottles',docId:'${b.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(b.name||"Bottle")}'},-1)">−</button>
+        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'perfume_bottles',docId:'${b.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(b.name||"Bottle")}'},1)">+</button>
+        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('bottle','${b.id}')" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('perfume_bottles','${b.id}','bottle')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER — TESTERS (with Purchase Date)
+════════════════════════════════════════════════════════════ */
+async function renderTesters() {
+  const grid = document.getElementById("testerGrid");
+  if (!grid) return;
+  const q = (document.getElementById("testerSearch")?.value || "").toLowerCase();
+  const list = testers.filter(t =>
+    !q || (t.name||"").toLowerCase().includes(q) || (t.brand||"").toLowerCase().includes(q)
+  );
+
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No testers yet — click "＋ Add Tester"</div>`;
+    return;
+  }
+
+  for (const t of list) {
+    const src = await resolveImageSrc(t.image);
+    const qty = Number(t.quantity) || 0;
+    const card = document.createElement("div");
+    card.className = "frag-card";
+    card.innerHTML = `
+      ${src
+        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
+        : `<div class="frag-card-emoji">💧</div>`}
+      <div class="frag-card-name">${escapeHtml(t.name || "Unnamed")}</div>
+      <div style="font-size:0.68rem;color:var(--text3)">${escapeHtml(t.brand||"")}${t.location ? " · "+t.location : ""}</div>
+      <div class="frag-stock-pill good">Qty: ${qty}</div>
+      ${t.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${t.purchaseDate}</div>` : ""}
+      <div class="card-actions">
+        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'testers',docId:'${t.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(t.name||"Tester")}'},-1)">−</button>
+        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'testers',docId:'${t.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(t.name||"Tester")}'},1)">+</button>
+        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('tester','${t.id}')" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('testers','${t.id}','tester')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER — BOXES
+════════════════════════════════════════════════════════════ */
+function switchBoxTab(tab, el) {
+  currentBoxTab = tab;
+  document.querySelectorAll('#view-boxes .size-chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderBoxes();
+}
+
+async function renderBoxes() {
+  const grid = document.getElementById("boxGrid");
+  if (!grid) return;
+  const q = (document.getElementById("boxSearch")?.value || "").toLowerCase();
+  const col = boxCollectionForTab(currentBoxTab);
+  const list = boxItems.filter(b => !q || (b.name||"").toLowerCase().includes(q));
+
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No boxes in this tab yet — click "＋ Add Box"</div>`;
+    return;
+  }
+
+  for (const b of list) {
+    const src = await resolveImageSrc(b.image);
+    const qty = Number(b.quantity) || 0;
+    const card = document.createElement("div");
+    card.className = "frag-card";
+    card.innerHTML = `
+      ${src
+        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
+        : `<div class="frag-card-emoji">📦</div>`}
+      <div class="frag-card-name">${escapeHtml(b.name || "Unnamed")}</div>
+      ${b.sizes ? `<div style="font-size:0.68rem;color:var(--text3)">Sizes: ${escapeHtml(b.sizes)}</div>` : ""}
+      ${b.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${b.purchaseDate}</div>` : ""}
+      <div class="frag-stock-pill good">Qty: ${qty}</div>
+      <div class="card-actions">
+        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${b.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(b.name||"Box")}'},-1)">−</button>
+        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${b.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(b.name||"Box")}'},1)">+</button>
+        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('box','${b.id}')" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('${col}','${b.id}','box')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function boxCollectionForTab(tab) {
+  return tab === "testers" ? "boxes_testers"
+       : tab === "20ml"    ? "boxes_20ml"
+       : tab === "50ml"    ? "boxes_50ml"
+       : tab === "100ml"   ? "boxes_100ml"
+       :                     "boxes_combo";
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER — LABELS
+════════════════════════════════════════════════════════════ */
+function switchLabelTab(tab, el) {
+  currentLabelTab = tab;
+  document.querySelectorAll('#view-labels .size-chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderLabels();
+}
+
+async function renderLabels() {
+  const grid = document.getElementById("labelGrid");
+  if (!grid) return;
+  const q = (document.getElementById("labelSearch")?.value || "").toLowerCase();
+  const col = labelCollectionForTab(currentLabelTab);
+  const list = labelItems.filter(l => !q || (l.name||"").toLowerCase().includes(q));
+
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">No labels in this tab yet — click "＋ Add Label"</div>`;
+    return;
+  }
+
+  for (const l of list) {
+    const src = await resolveImageSrc(l.image);
+    const qty = Number(l.quantity) || 0;
+    const card = document.createElement("div");
+    card.className = "frag-card";
+    card.innerHTML = `
+      ${src
+        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
+        : `<div class="frag-card-emoji">🏷️</div>`}
+      <div class="frag-card-name">${escapeHtml(l.name || "Unnamed")}</div>
+      ${l.sizes ? `<div style="font-size:0.68rem;color:var(--text3)">Sizes: ${escapeHtml(l.sizes)}</div>` : ""}
+      ${l.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${l.purchaseDate}</div>` : ""}
+      <div class="frag-stock-pill good">Qty: ${qty}</div>
+      <div class="card-actions">
+        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${l.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(l.name||"Label")}'},-1)">−</button>
+        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${l.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(l.name||"Label")}'},1)">+</button>
+        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('label','${l.id}')" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('${col}','${l.id}','label')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function labelCollectionForTab(tab) {
+  return tab === "testers" ? "labels_testers"
+       : tab === "20ml"    ? "labels_20ml"
+       : tab === "50ml"    ? "labels_50ml"
+       : tab === "100ml"   ? "labels_100ml"
+       : tab === "card"    ? "labels_card"
+       :                     "labels_sticker";
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER — PACKAGING
+════════════════════════════════════════════════════════════ */
+function switchPackagingTab(tab, el) {
+  currentPackagingTab = tab;
+  document.querySelectorAll('#view-packaging .size-chip').forEach(c => c.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderPackaging();
+}
+
+async function renderPackaging() {
+  const grid = document.getElementById("packagingGrid");
+  if (!grid) return;
+  const q = (document.getElementById("packagingSearch")?.value || "").toLowerCase();
+  const col = packagingCollectionForTab(currentPackagingTab);
+  const list = packagingItems.filter(p => !q || (p.name||"").toLowerCase().includes(q));
+
+  grid.innerHTML = "";
+  if (list.length === 0) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text3)">Nothing here yet — click "＋ Add Item"</div>`;
+    return;
+  }
+
+  for (const p of list) {
+    const src = await resolveImageSrc(p.image);
+    const qty = Number(p.quantity) || 0;
+    const card = document.createElement("div");
+    card.className = "frag-card";
+    card.innerHTML = `
+      ${src
+        ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
+        : `<div class="frag-card-emoji">🛍️</div>`}
+      <div class="frag-card-name">${escapeHtml(p.name || "Unnamed")}</div>
+      ${p.purchaseDate ? `<div style="font-size:0.66rem;color:var(--text3)">Bought: ${p.purchaseDate}</div>` : ""}
+      <div class="frag-stock-pill good">Qty: ${qty}</div>
+      <div class="card-actions">
+        <button class="card-minus-btn" title="Use one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${p.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(p.name||"Item")}'},-1)">−</button>
+        <button class="card-plus-btn" title="Add one" onclick="event.stopPropagation();openAmountModal({collection:'${col}',docId:'${p.id}',field:'quantity',start:${qty},unit:'qty',name:'${escapeAttr(p.name||"Item")}'},1)">+</button>
+        <button class="edit-sale-btn" onclick="event.stopPropagation();openModal('packaging','${p.id}')" title="Edit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="delete-sale-btn" onclick="event.stopPropagation();confirmDelete('${col}','${p.id}','item')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function packagingCollectionForTab(tab) {
+  return tab === "bubble" ? "packaging_bubble"
+       : tab === "bag"    ? "packaging_bag"
+       :                    "packaging_paper";
+}
+
+/* ════════════════════════════════════════════════════════════
    DELETE — custom confirm + GitHub image cleanup
 ════════════════════════════════════════════════════════════ */
 function confirmDelete(colName, id, label = "item") {
@@ -970,7 +1201,6 @@ function confirmDelete(colName, id, label = "item") {
     async () => {
       const removed = findItemByCollection(colName, id);
 
-      // 1. Try to delete the image from GitHub first (if any)
       if (removed && removed.image) {
         try {
           await deleteImageFromGitHub(removed.image);
@@ -979,7 +1209,6 @@ function confirmDelete(colName, id, label = "item") {
         }
       }
 
-      // 2. Delete the Firestore doc
       try {
         await deleteDoc(doc(db, colName, id));
         showToast("Deleted ✅", "success");
@@ -1028,6 +1257,52 @@ async function openModal(section, id = null) {
       { key: "status",   label: "Status",      type: "select",   value: currentItem?.status || "PENDING", options: ["PENDING","DONE"] },
       { key: "notes",    label: "Notes",       type: "textarea", value: currentItem?.notes || "" },
     ];
+  } else if (section === "change") {
+    titleText = id ? "Edit Change" : "Add Change";
+    fields = [
+      { key: "title",       label: "Title *",     type: "text",     value: currentItem?.title || "" },
+      { key: "category",    label: "Category",    type: "select",   value: currentItem?.category || "NEW", options: ["NEW","UPDATE","FIX","REMOVED"] },
+      { key: "date",        label: "Date",        type: "date",     value: currentItem?.date || new Date().toISOString().split("T")[0] },
+      { key: "description", label: "Description", type: "textarea", value: currentItem?.description || "" },
+    ];
+  } else if (section === "expense") {
+    titleText = id ? "Edit Expense" : "Add Expense";
+    fields = [
+      { key: "title",   label: "Title *",         type: "text",     value: currentItem?.title || "" },
+      { key: "amount",  label: "Amount (₹) *",    type: "number",   value: currentItem?.amount || "" },
+      { key: "notes",   label: "Notes *",         type: "textarea", value: currentItem?.notes || "" },
+      { key: "payment", label: "Mode of Payment *", type: "select",
+        value: currentItem?.payment || "Paid Cash",
+        options: ["Paid Cash", "Paid Online"] },
+      { key: "date",     label: "Date",           type: "date",     value: currentItem?.date || new Date().toISOString().split("T")[0] },
+      { key: "priority", label: "Priority",       type: "select",   value: currentItem?.priority || "MEDIUM", options: ["HIGH","MEDIUM","LOW"] },
+      { key: "status",   label: "Status",         type: "select",   value: currentItem?.status || "PENDING", options: ["PENDING","DONE"] },
+    ];
+  } else if (section === "frag") {
+    titleText = id ? "Edit Fragrance" : "Add Fragrance";
+    fields = [
+      { key: "name",         label: "Name *",        type: "text",     value: currentItem?.name || "" },
+      { key: "brand",        label: "Brand",         type: "text",     value: currentItem?.brand || "" },
+      { key: "sizes",        label: "Available ML",  type: "text",     value: currentItem?.sizes || "", placeholder: "e.g. 50ml, 100ml, 200ml" },
+      { key: "quantity",     label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
+      { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
+      { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
+    ];
+    if (!id) {
+      fields.unshift({
+        key: "fragTab", label: "Add To *", type: "select",
+        value: currentFragTab, options: ["have","add","remove"],
+        optionLabels: { have: "📦 We Have", add: "🟢 To Add", remove: "🔴 To Remove" }
+      });
+    }
+  } else if (section === "ethonol") {
+    titleText = id ? "Edit Ethanol" : "Add Ethanol";
+    fields = [
+      { key: "name",         label: "Name *",         type: "text",     value: currentItem?.name || "", placeholder: "e.g. Ethanol Batch A" },
+      { key: "ml",           label: "Available (ml)", type: "qty",      value: currentItem?.ml || 500 },
+      { key: "purchaseDate", label: "Purchase Date",  type: "date",     value: currentItem?.purchaseDate || "" },
+      { key: "notes",        label: "Notes",          type: "textarea", value: currentItem?.notes || "" },
+    ];
   } else if (section === "bottle") {
     titleText = id ? "Edit Bottle" : "Add Bottle";
     fields = [
@@ -1043,43 +1318,60 @@ async function openModal(section, id = null) {
   } else if (section === "tester") {
     titleText = id ? "Edit Tester" : "Add Tester";
     fields = [
-      { key: "name",     label: "Name *",    type: "text",     value: currentItem?.name || "" },
-      { key: "brand",    label: "Brand",     type: "text",     value: currentItem?.brand || "" },
-      { key: "quantity", label: "Quantity",  type: "qty",      value: currentItem?.quantity || 1 },
-      { key: "location", label: "Location",  type: "text",     value: currentItem?.location || "" },
-      { key: "notes",    label: "Notes",     type: "textarea", value: currentItem?.notes || "" },
+      { key: "name",         label: "Name *",        type: "text",     value: currentItem?.name || "" },
+      { key: "brand",        label: "Brand",         type: "text",     value: currentItem?.brand || "" },
+      { key: "quantity",     label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
+      { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
+      { key: "location",     label: "Location",      type: "text",     value: currentItem?.location || "" },
+      { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
     ];
-  } else if (section === "change") {
-    titleText = id ? "Edit Change" : "Add Change";
+  } else if (section === "box") {
+    titleText = id ? "Edit Box" : "Add Box";
     fields = [
-      { key: "title",       label: "Title *",     type: "text",     value: currentItem?.title || "" },
-      { key: "category",    label: "Category",    type: "select",   value: currentItem?.category || "NEW", options: ["NEW","UPDATE","FIX","REMOVED"] },
-      { key: "date",        label: "Date",        type: "date",     value: currentItem?.date || new Date().toISOString().split("T")[0] },
-      { key: "description", label: "Description", type: "textarea", value: currentItem?.description || "" },
-    ];
-  } else if (section === "frag") {
-    titleText = id ? "Edit Fragrance" : "Add Fragrance";
-    fields = [
-      { key: "name",     label: "Name *",        type: "text",     value: currentItem?.name || "" },
-      { key: "brand",    label: "Brand",         type: "text",     value: currentItem?.brand || "" },
-      { key: "sizes",    label: "Available ML",  type: "text",     value: currentItem?.sizes || "", placeholder: "e.g. 50ml, 100ml, 200ml" },
-      { key: "quantity", label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
-      { key: "notes",    label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
+      { key: "name",         label: "Name *",        type: "text",     value: currentItem?.name || "" },
+      { key: "quantity",     label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
+      { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
+      { key: "sizes",        label: "Sizes",         type: "text",     value: currentItem?.sizes || "", placeholder: "e.g. small, medium, large" },
+      { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
     ];
     if (!id) {
       fields.unshift({
-        key: "fragTab", label: "Add To *", type: "select",
-        value: currentFragTab, options: ["have","add","remove"],
-        optionLabels: { have: "📦 We Have", add: "🟢 To Add", remove: "🔴 To Remove" }
+        key: "boxTab", label: "Add To *", type: "select",
+        value: currentBoxTab, options: ["testers","20ml","50ml","100ml","combo"],
+        optionLabels: { testers: "Testers", "20ml": "20 ml", "50ml": "50 ml", "100ml": "100 ml", combo: "Combo Box" }
       });
     }
-  } else if (section === "ethonol") {
-    titleText = id ? "Edit Ethanol" : "Add Ethanol";
+  } else if (section === "label") {
+    titleText = id ? "Edit Label" : "Add Label";
     fields = [
-      { key: "name",  label: "Name *",         type: "text",     value: currentItem?.name || "", placeholder: "e.g. Ethanol Batch A" },
-      { key: "ml",    label: "Available (ml)", type: "qty",      value: currentItem?.ml || 500 },
-      { key: "notes", label: "Notes",          type: "textarea", value: currentItem?.notes || "" },
+      { key: "name",         label: "Name *",        type: "text",     value: currentItem?.name || "" },
+      { key: "quantity",     label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
+      { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
+      { key: "sizes",        label: "Sizes",         type: "text",     value: currentItem?.sizes || "", placeholder: "e.g. small, medium" },
+      { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
     ];
+    if (!id) {
+      fields.unshift({
+        key: "labelTab", label: "Add To *", type: "select",
+        value: currentLabelTab, options: ["testers","20ml","50ml","100ml","card","sticker"],
+        optionLabels: { testers: "Testers", "20ml": "20 ml", "50ml": "50 ml", "100ml": "100 ml", card: "Thank You Card", sticker: "Sticker" }
+      });
+    }
+  } else if (section === "packaging") {
+    titleText = id ? "Edit Packaging" : "Add Packaging";
+    fields = [
+      { key: "name",         label: "Name *",        type: "text",     value: currentItem?.name || "" },
+      { key: "quantity",     label: "Quantity",      type: "qty",      value: currentItem?.quantity || 1 },
+      { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
+      { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
+    ];
+    if (!id) {
+      fields.unshift({
+        key: "packagingTab", label: "Add To *", type: "select",
+        value: currentPackagingTab, options: ["bubble","bag","paper"],
+        optionLabels: { bubble: "Bubble Roll", bag: "Packing Bag", paper: "Paper Hand Bag" }
+      });
+    }
   }
 
   titleEl.textContent = titleText;
@@ -1135,9 +1427,15 @@ async function openModal(section, id = null) {
     }
   }
 
+  if (section === "expense") {
+    html += `
+      <div id="expenseWarn" style="display:none;padding:10px 14px;background:rgba(217,79,79,0.08);border:1px solid rgba(217,79,79,0.25);border-radius:10px;font-size:0.78rem;color:var(--red);margin-top:4px;line-height:1.4"></div>
+    `;
+  }
+
   html += `
     <div class="edit-row" style="margin-top:6px;border-top:1px solid rgba(210,195,175,0.35);padding-top:14px">
-      <label>Image</label>
+      <label>${section === "expense" ? "Receipt Image" : "Image"}</label>
       <div id="modalImgPreview" style="margin-bottom:8px"></div>
       <input type="file" id="modalImgInput" accept="image/*" class="field-input" onchange="handleModalImageSelect(event)" />
       <div id="modalImgStatus" style="font-size:0.74rem;color:var(--text3);margin-top:6px"></div>
@@ -1147,12 +1445,45 @@ async function openModal(section, id = null) {
   bodyEl.innerHTML = html;
   enhanceAllSelects(bodyEl);
 
+  if (section === "expense") {
+    bodyEl.querySelectorAll("[data-key]").forEach(el => {
+      el.addEventListener("input", updateExpenseWarning);
+      el.addEventListener("change", updateExpenseWarning);
+    });
+  }
+
   if (currentItem?.image) {
     modalImageUrl = currentItem.image;
     renderModalImagePreview();
   }
+  if (section === "expense") updateExpenseWarning();
 
   document.getElementById("genericModal").style.display = "flex";
+}
+
+function updateExpenseWarning() {
+  const warnEl = document.getElementById("expenseWarn");
+  if (!warnEl) return;
+
+  const getVal = (k) => {
+    const el = document.querySelector(`#modalBody [data-key="${k}"]`);
+    return el ? el.value : "";
+  };
+
+  const payment = (getVal("payment") || "").toLowerCase();
+  const notes   = (getVal("notes")   || "").trim();
+
+  const problems = [];
+  if (!notes) problems.push("Notes is required");
+  if (payment.includes("online") && !modalImageUrl) problems.push("Receipt image is required for online payments");
+
+  if (problems.length) {
+    warnEl.style.display = "block";
+    warnEl.textContent = "⚠ " + problems.join(" · ");
+  } else {
+    warnEl.style.display = "none";
+    warnEl.textContent = "";
+  }
 }
 
 function modalChangeQty(key, delta) {
@@ -1166,12 +1497,16 @@ function modalChangeQty(key, delta) {
 
 function collectionForSection(section) {
   return {
-    todo:    "todo_items",
-    bottle:  "perfume_bottles",
-    tester:  "testers",
-    change:  "new_changes",
-    frag:    fragCollection(currentFragTab),
-    ethonol: "ethonol_items"
+    todo:      "todo_items",
+    change:    "new_changes",
+    expense:   "expenses_items",
+    frag:      fragCollection(currentFragTab),
+    ethonol:   "ethonol_items",
+    bottle:    "perfume_bottles",
+    tester:    "testers",
+    box:       boxCollectionForTab(currentBoxTab),
+    label:     labelCollectionForTab(currentLabelTab),
+    packaging: packagingCollectionForTab(currentPackagingTab)
   }[section];
 }
 
@@ -1185,12 +1520,16 @@ async function handleModalImageSelect(ev) {
   modalUploading = true;
 
   const folderMap = {
-    todo:    "todo",
-    bottle:  "bottles",
-    tester:  "testers",
-    change:  "changes",
-    frag:    "fragrances",
-    ethonol: "ethonol"
+    todo:      "todo",
+    change:    "changes",
+    expense:   "expenses",
+    frag:      "fragrances",
+    ethonol:   "ethonol",
+    bottle:    "bottles",
+    tester:    "testers",
+    box:       "boxes",
+    label:     "labels",
+    packaging: "packaging"
   };
   const folder = folderMap[modalSection] || "misc";
 
@@ -1199,6 +1538,7 @@ async function handleModalImageSelect(ev) {
     modalImageUrl = "ghapi:" + path;
     statusEl.textContent = "✅ Uploaded";
     renderModalImagePreview();
+    if (modalSection === "expense") updateExpenseWarning();
   } catch (err) {
     console.error(err);
     statusEl.textContent = "❌ Upload failed: " + err.message;
@@ -1225,6 +1565,7 @@ function clearModalImage() {
   document.getElementById("modalImgPreview").innerHTML = "";
   document.getElementById("modalImgInput").value = "";
   document.getElementById("modalImgStatus").textContent = "";
+  if (modalSection === "expense") updateExpenseWarning();
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1245,17 +1586,37 @@ async function saveModal() {
   }
 
   const requiredMap = {
-    todo:    "title",
-    bottle:  "name",
-    tester:  "name",
-    change:  "title",
-    frag:    "name",
-    ethonol: "name"
+    todo:      "title",
+    change:    "title",
+    expense:   "title",
+    frag:      "name",
+    ethonol:   "name",
+    bottle:    "name",
+    tester:    "name",
+    box:       "name",
+    label:     "name",
+    packaging: "name"
   };
   const reqKey = requiredMap[modalSection];
   if (reqKey && (!data[reqKey] || !data[reqKey].toString().trim())) {
     showToast("Please fill in required fields", "error");
     return;
+  }
+
+  if (modalSection === "expense") {
+    const notes = (data.notes || "").toString().trim();
+    const isOnline = (data.payment || "").toLowerCase().includes("online");
+
+    if (!notes) {
+      showToast("Notes is required for every expense", "error");
+      updateExpenseWarning();
+      return;
+    }
+    if (isOnline && !modalImageUrl) {
+      showToast("Receipt image is required for online payments", "error");
+      updateExpenseWarning();
+      return;
+    }
   }
 
   data.image = modalImageUrl || "";
@@ -1265,6 +1626,15 @@ async function saveModal() {
   if (modalSection === "frag" && data.fragTab) {
     targetCollection = fragCollection(data.fragTab);
     delete data.fragTab;
+  } else if (modalSection === "box" && data.boxTab) {
+    targetCollection = boxCollectionForTab(data.boxTab);
+    delete data.boxTab;
+  } else if (modalSection === "label" && data.labelTab) {
+    targetCollection = labelCollectionForTab(data.labelTab);
+    delete data.labelTab;
+  } else if (modalSection === "packaging" && data.packagingTab) {
+    targetCollection = packagingCollectionForTab(data.packagingTab);
+    delete data.packagingTab;
   }
 
   if (modalEditId) {
@@ -1283,7 +1653,6 @@ async function saveModal() {
         if (snapBefore.exists()) before = snapBefore.data();
       } catch (_) {}
 
-      // If editing and the image was replaced, delete the old file from GitHub
       if (before && before.image && before.image !== data.image) {
         try {
           await deleteImageFromGitHub(before.image);
@@ -1319,6 +1688,378 @@ function closeModal() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   MZ AROMAS PRICE LIST
+════════════════════════════════════════════════════════════ */
+const MZ_PRICE_LIST = [
+  { s:1,   name:"AJMAL AURAM SPL",                       mz:12000, half:6000,  ml10:1220 },
+  { s:2,   name:"AJMAL BLU",                              mz:4200,  half:2100,  ml10:440  },
+  { s:3,   name:"AJMAL BLUE MOON",                        mz:4400,  half:2200,  ml10:460  },
+  { s:4,   name:"AJMAL DUBAI OUD",                        mz:16200, half:8100,  ml10:1640 },
+  { s:5,   name:"AJMAL MUSK RIJALI GOLD",                 mz:11000, half:5500,  ml10:1120 },
+  { s:6,   name:"AJMAL MUSK RIJALI SPL",                  mz:16600, half:8300,  ml10:1680 },
+  { s:7,   name:"AJMAL MUSK ROSE",                        mz:4800,  half:2400,  ml10:500  },
+  { s:8,   name:"AJMAL RAIN DROP",                        mz:4800,  half:2400,  ml10:500  },
+  { s:9,   name:"AL REHAB OUD ROSE",                      mz:5800,  half:2900,  ml10:600  },
+  { s:10,  name:"AL HARMAIN MADINA",                      mz:5200,  half:2600,  ml10:540  },
+  { s:11,  name:"AL NUAIM CHOCOLATE MUSK",                mz:1800,  half:900,   ml10:200  },
+  { s:12,  name:"AL NUAIM ORIGINAL XX",                   mz:3400,  half:1700,  ml10:360  },
+  { s:13,  name:"AL REHAB ASEEL",                         mz:4400,  half:2200,  ml10:460  },
+  { s:14,  name:"AL REHAB LOVELY",                        mz:3000,  half:1500,  ml10:320  },
+  { s:15,  name:"AL REHAB SABAYA",                        mz:3600,  half:1800,  ml10:380  },
+  { s:16,  name:"AL REHAB TYPE CHELSEA",                  mz:4000,  half:2000,  ml10:420  },
+  { s:17,  name:"AL REHAB TYPE SOFTY",                    mz:2800,  half:1400,  ml10:300  },
+  { s:18,  name:"ALLURE HOMME SPORTS",                    mz:3400,  half:1700,  ml10:360  },
+  { s:19,  name:"AL-NUAIM KASHMIRI OUD",                  mz:10400, half:5200,  ml10:1060 },
+  { s:20,  name:"AL-NUAIM KASHMIRI OUD SUPER",            mz:6000,  half:3000,  ml10:620  },
+  { s:21,  name:"AL-NUAIM NAZNEEN",                       mz:3600,  half:1800,  ml10:380  },
+  { s:22,  name:"AL-NUAIM OUDH",                          mz:6200,  half:3100,  ml10:640  },
+  { s:23,  name:"AL-REHAB SHADHA",                        mz:4000,  half:2000,  ml10:420  },
+  { s:24,  name:"AL-REHAB TYPE LORDS",                    mz:4800,  half:2400,  ml10:500  },
+  { s:25,  name:"AMOUAGE GOLD POUR FEMME",                mz:6600,  half:3300,  ml10:680  },
+  { s:26,  name:"AMOUAGE JUBILATION XXV",                 mz:6200,  half:3100,  ml10:640  },
+  { s:27,  name:"AMOUAGE REFLECTION",                     mz:5400,  half:2700,  ml10:560  },
+  { s:28,  name:"ANTONIO BANDERAS BLUE SEDUCTION",        mz:6000,  half:3000,  ml10:620  },
+  { s:29,  name:"AQUA BREEZE",                            mz:4000,  half:2000,  ml10:420  },
+  { s:30,  name:"ARABIAN OUD KALEMAT OUD",                mz:5000,  half:2500,  ml10:520  },
+  { s:31,  name:"ARABIYAT LAMSAT HARRIR",                 mz:4400,  half:2200,  ml10:460  },
+  { s:32,  name:"ARD AL ZAAFARAN DIRHAM",                 mz:3800,  half:1900,  ml10:400  },
+  { s:33,  name:"ARMAF CLUB DE NUIT ICONIC",              mz:4800,  half:2400,  ml10:500  },
+  { s:34,  name:"ARMAF CLUB DE NUIT INTENSE",             mz:10000, half:5000,  ml10:1020 },
+  { s:35,  name:"ARMAF CLUB DE NUIT UNTOLD",              mz:4000,  half:2000,  ml10:420  },
+  { s:36,  name:"ARMAF CLUB DE NUIT WOMEN",               mz:4800,  half:2400,  ml10:500  },
+  { s:37,  name:"ARMAF DUBAI CHOCOLATE",                  mz:5400,  half:2700,  ml10:560  },
+  { s:38,  name:"ARMANI AQUA DI GIO",                     mz:3400,  half:1700,  ml10:360  },
+  { s:39,  name:"ARMANI AQUA DI GIO PROFUMO",             mz:5000,  half:2500,  ml10:520  },
+  { s:40,  name:"ARMANI CODE",                            mz:4200,  half:2100,  ml10:440  },
+  { s:41,  name:"ARMANI MY WAY",                          mz:4800,  half:2400,  ml10:500  },
+  { s:42,  name:"ARMANI SI PASSION",                      mz:4800,  half:2400,  ml10:500  },
+  { s:43,  name:"ARMANI SI ROSE SIGNATURE",               mz:5600,  half:2800,  ml10:580  },
+  { s:44,  name:"ARMANI STRONGER WITH YOU INTENSELY",     mz:5400,  half:2700,  ml10:560  },
+  { s:45,  name:"ATTARFULL LG",                           mz:2200,  half:1100,  ml10:240  },
+  { s:46,  name:"AVON GOLD RARE",                         mz:6000,  half:3000,  ml10:620  },
+  { s:47,  name:"AZZARO CHROME",                          mz:2600,  half:1300,  ml10:280  },
+  { s:48,  name:"AZZARO MOST WANTED",                     mz:6000,  half:3000,  ml10:620  },
+  { s:49,  name:"BATH AND BODY WORKS DAHLIA",             mz:4200,  half:2100,  ml10:440  },
+  { s:50,  name:"BATH AND BODY WORKS INTO THE NIGHTS",    mz:3600,  half:1800,  ml10:380  },
+  { s:51,  name:"BATH AND BODY WORKS PINK CHIFFON",       mz:3400,  half:1700,  ml10:360  },
+  { s:52,  name:"BATH AND BODY WORKS VAMPIRE BLOOD",      mz:5200,  half:2600,  ml10:540  },
+  { s:53,  name:"BLACK MASK",                             mz:4400,  half:2200,  ml10:460  },
+  { s:54,  name:"BLACKBERRY MUSK WOMEN (CREATION)",       mz:4400,  half:2200,  ml10:460  },
+  { s:55,  name:"BLUE DE INFUSION (CREATION)",            mz:4200,  half:2100,  ml10:440  },
+  { s:56,  name:"BLUEBERRY MUSK",                         mz:4600,  half:2300,  ml10:480  },
+  { s:57,  name:"BOND NO.9 NEW YORK OUD SPL",             mz:10000, half:5000,  ml10:1020 },
+  { s:58,  name:"BOND NO.9 NEW YORK OUD SUPER",           mz:6400,  half:3200,  ml10:660  },
+  { s:59,  name:"BRITNEY SPEARS MIDNIGHT",                mz:3400,  half:1700,  ml10:360  },
+  { s:60,  name:"BRUT",                                   mz:2800,  half:1400,  ml10:300  },
+  { s:61,  name:"BURBERRY BODY",                          mz:4000,  half:2000,  ml10:420  },
+  { s:62,  name:"BURBERRY FOR HER",                       mz:4400,  half:2200,  ml10:460  },
+  { s:63,  name:"BVLGARI AQUA",                           mz:5400,  half:2700,  ml10:560  },
+  { s:64,  name:"BVLGARI BLACK VINTAGE",                  mz:3000,  half:1500,  ml10:320  },
+  { s:65,  name:"BVLGARI TYGAR",                          mz:12000, half:6000,  ml10:1220 },
+  { s:66,  name:"CAROLINA HERRERA 212 MEN SPL",           mz:6000,  half:3000,  ml10:620  },
+  { s:67,  name:"CAROLINA HERRERA BAD BOY",               mz:5000,  half:2500,  ml10:520  },
+  { s:68,  name:"CAROLINA HERRERA GOOD GIRL",             mz:4200,  half:2100,  ml10:440  },
+  { s:69,  name:"CAROLINA HERRERA GOOD GIRL RED VELVET",  mz:5000,  half:2500,  ml10:520  },
+  { s:70,  name:"CARTIER PASHA DE CARTIER",               mz:4000,  half:2000,  ml10:420  },
+  { s:71,  name:"CARTIER ROADSTER",                       mz:6000,  half:3000,  ml10:620  },
+  { s:72,  name:"CHANEL BLUE DE CHANEL",                  mz:5000,  half:2500,  ml10:520  },
+  { s:73,  name:"CHANEL COCO MADEMOISELLE",               mz:4800,  half:2400,  ml10:500  },
+  { s:74,  name:"CHANEL NO. 5",                           mz:3200,  half:1600,  ml10:340  },
+  { s:75,  name:"CHERRY SPL",                             mz:2400,  half:1200,  ml10:260  },
+  { s:76,  name:"CK ETERNITY WOMEN / ETERNA",             mz:2800,  half:1400,  ml10:300  },
+  { s:77,  name:"CK ONE",                                 mz:3600,  half:1800,  ml10:380  },
+  { s:78,  name:"COBRA",                                  mz:2600,  half:1300,  ml10:280  },
+  { s:79,  name:"CREED GREEN IRISH TWEED",                mz:5000,  half:2500,  ml10:520  },
+  { s:80,  name:"D&G LIGHT BLUE MEN INTENSE",             mz:4800,  half:2400,  ml10:500  },
+  { s:81,  name:"D&G THE KING",                           mz:4600,  half:2300,  ml10:480  },
+  { s:82,  name:"D&G THE ONE",                            mz:6000,  half:3000,  ml10:620  },
+  { s:83,  name:"DANA",                                   mz:3000,  half:1500,  ml10:320  },
+  { s:84,  name:"DARK CHOCOLATE",                         mz:1800,  half:900,   ml10:200  },
+  { s:85,  name:"DAVIDOFF COOL WATER MEN MZ",             mz:3000,  half:1500,  ml10:320  },
+  { s:86,  name:"DAVIDOFF COOL WATER MEN SPL",            mz:3600,  half:1800,  ml10:380  },
+  { s:87,  name:"DAVIDOFF COOL WATER WOMEN",              mz:3200,  half:1600,  ml10:340  },
+  { s:88,  name:"DERRAH LINK BLANC",                      mz:5200,  half:2600,  ml10:540  },
+  { s:89,  name:"DG GORE GARDEN BLOOM",                   mz:1600,  half:800,   ml10:180  },
+  { s:90,  name:"DIOR FAHRENHEIT",                        mz:3400,  half:1700,  ml10:360  },
+  { s:91,  name:"DIOR HOMME INTENSE",                     mz:4800,  half:2400,  ml10:500  },
+  { s:92,  name:"DIOR HOMME INTENSE SPL",                 mz:8000,  half:4000,  ml10:820  },
+  { s:93,  name:"DIOR HOMME SPORTS",                      mz:4600,  half:2300,  ml10:480  },
+  { s:94,  name:"DIOR JADORE",                            mz:3200,  half:1600,  ml10:340  },
+  { s:95,  name:"DIOR MISS DIOR CHERIE",                  mz:4000,  half:2000,  ml10:420  },
+  { s:96,  name:"DIOR POIZON",                            mz:3200,  half:1600,  ml10:340  },
+  { s:97,  name:"DIOR SAUVAGE",                           mz:5000,  half:2500,  ml10:520  },
+  { s:98,  name:"DIOR SAUVAGE ELIXIR",                    mz:8000,  half:4000,  ml10:820  },
+  { s:99,  name:"DIOR SAUVAGE ELIXIR SUPER",              mz:5000,  half:2500,  ml10:520  },
+  { s:100, name:"DIPTYQUE TAM DAO",                       mz:5800,  half:2900,  ml10:600  },
+  { s:101, name:"DOVE PINK",                              mz:1800,  half:900,   ml10:200  },
+  { s:102, name:"DOVE WHITE",                             mz:1800,  half:900,   ml10:200  },
+  { s:103, name:"DUNHILL DESIRE BLUE",                    mz:3400,  half:1700,  ml10:360  },
+  { s:104, name:"DUNHILL DESIRE RED",                     mz:4200,  half:2100,  ml10:440  },
+  { s:105, name:"DUNHILL ICON ABSOLUTE",                  mz:7800,  half:3900,  ml10:800  },
+  { s:106, name:"ESCADA TAJ SUNSET",                      mz:3600,  half:1800,  ml10:380  },
+  { s:107, name:"ESTEE LAUDER BEAUTIFUL BELLE PRM",       mz:11400, half:5700,  ml10:1160 },
+  { s:108, name:"ESTEE LAUDER PLEASURE",                  mz:3800,  half:1900,  ml10:400  },
+  { s:109, name:"FANTASIA SHK",                           mz:5000,  half:2500,  ml10:520  },
+  { s:110, name:"FERRARI BLACK",                          mz:3600,  half:1800,  ml10:380  },
+  { s:111, name:"FIXATURE",                               mz:6000,  half:3000,  ml10:620  },
+  { s:112, name:"GISSAH AKOYA",                           mz:8000,  half:4000,  ml10:820  },
+  { s:113, name:"GISSAH HUDSON VALLEY",                   mz:9400,  half:4700,  ml10:960  },
+  { s:114, name:"GISSAH IMPERIAL VALLEY",                 mz:10000, half:5000,  ml10:1020 },
+  { s:115, name:"GISSAH LA LUNA",                         mz:6000,  half:3000,  ml10:620  },
+  { s:116, name:"GIVENCHY AMARIAGE",                      mz:2600,  half:1300,  ml10:280  },
+  { s:117, name:"GIVENCHY BLUE",                          mz:4400,  half:2200,  ml10:460  },
+  { s:118, name:"GIVENCHY GENTLEMEN",                     mz:4000,  half:2000,  ml10:420  },
+  { s:119, name:"GOLD SANDAL",                            mz:3600,  half:1800,  ml10:380  },
+  { s:120, name:"GOLDEN DUST",                            mz:3000,  half:1500,  ml10:320  },
+  { s:121, name:"GREEN AJMERI",                           mz:8000,  half:4000,  ml10:820  },
+  { s:122, name:"GUCCI FLORA",                            mz:3600,  half:1800,  ml10:380  },
+  { s:123, name:"GUCCI FLORA BY GUCCI EAU",               mz:5000,  half:2500,  ml10:520  },
+  { s:124, name:"GUCCI FLORA GORGEOUS GARDENIA",          mz:4400,  half:2200,  ml10:460  },
+  { s:125, name:"GUCCI GUILTY POUR HOMME",                mz:4000,  half:2000,  ml10:420  },
+  { s:126, name:"GUERLAIN SAMSARA",                       mz:5800,  half:2900,  ml10:600  },
+  { s:127, name:"GUESS SEDUCTIVE",                        mz:4400,  half:2200,  ml10:460  },
+  { s:128, name:"HUGO BOSS PREMIUM",                      mz:6400,  half:3200,  ml10:660  },
+  { s:129, name:"HUGO BOSS WOMEN",                        mz:3200,  half:1600,  ml10:340  },
+  { s:130, name:"IBRAHIM AL QURAISHI BLUE OUD",           mz:20000, half:10000, ml10:2020 },
+  { s:131, name:"ICEBERG",                                mz:2800,  half:1400,  ml10:300  },
+  { s:132, name:"INITIO OUD FOR GREATNESS",               mz:9000,  half:4500,  ml10:920  },
+  { s:133, name:"ISSEY MIYAKE MEN",                       mz:4000,  half:2000,  ml10:420  },
+  { s:134, name:"ISSEY MIYAKE MEN PREMIUM",               mz:5800,  half:2900,  ml10:600  },
+  { s:135, name:"JAGUAR BLACK",                           mz:4000,  half:2000,  ml10:420  },
+  { s:136, name:"JOOP",                                   mz:2600,  half:1300,  ml10:280  },
+  { s:137, name:"JOVAN MUSK",                             mz:3200,  half:1600,  ml10:340  },
+  { s:138, name:"JPG LE MALE",                            mz:3200,  half:1600,  ml10:340  },
+  { s:139, name:"JPG LE MALE ELIXIR",                     mz:5000,  half:2500,  ml10:520  },
+  { s:140, name:"JPG ULTRA MALE",                         mz:4000,  half:2000,  ml10:420  },
+  { s:141, name:"KASTURI",                                mz:4400,  half:2200,  ml10:460  },
+  { s:142, name:"KAYALI VANILLA 28",                      mz:5800,  half:2900,  ml10:600  },
+  { s:143, name:"KESAR CHANDAN",                          mz:6000,  half:3000,  ml10:620  },
+  { s:144, name:"KHADLAJ HAREEM AL SULTAN",               mz:4400,  half:2200,  ml10:460  },
+  { s:145, name:"KHALIS PERFUMES JAWAD AL LAYL",          mz:3600,  half:1800,  ml10:380  },
+  { s:146, name:"KILLIAN ANGEL'S SHARE",                  mz:4400,  half:2200,  ml10:460  },
+  { s:147, name:"KUNAFA CHOCOLATE",                       mz:5000,  half:2500,  ml10:520  },
+  { s:148, name:"LABBAIK",                                mz:2000,  half:1000,  ml10:220  },
+  { s:149, name:"LACOSTE WHITE L.12.12",                  mz:4200,  half:2100,  ml10:440  },
+  { s:150, name:"LANCOME LA VIE EST BELLE FLORALE SPL",   mz:7000,  half:3500,  ml10:720  },
+  { s:151, name:"LANCOME POEME",                          mz:2800,  half:1400,  ml10:300  },
+  { s:152, name:"LATAFFAH BADEE AL OUD",                  mz:9000,  half:4500,  ml10:920  },
+  { s:153, name:"LATAFFAH KHAMRAH",                       mz:4400,  half:2200,  ml10:460  },
+  { s:154, name:"LATTAFA AMEER AL OUD MZ",                mz:3600,  half:1800,  ml10:380  },
+  { s:155, name:"LATTAFA AMEER AL OUD SPL",               mz:4600,  half:2300,  ml10:480  },
+  { s:156, name:"LATTAFA ANA ABIYEDH",                    mz:7000,  half:3500,  ml10:720  },
+  { s:157, name:"LATTAFA ANA ABIYEDH ROUGE",              mz:4000,  half:2000,  ml10:420  },
+  { s:158, name:"LATTAFA ASAD",                           mz:10000, half:5000,  ml10:1020 },
+  { s:159, name:"LATTAFA FAKHAR",                         mz:4400,  half:2200,  ml10:460  },
+  { s:160, name:"LATTAFA KHAMRAH QAHWA",                  mz:5400,  half:2700,  ml10:560  },
+  { s:161, name:"LATTAFA KHAMRAH WAHA",                   mz:9000,  half:4500,  ml10:920  },
+  { s:162, name:"LATTAFA NAJDIA",                         mz:6000,  half:3000,  ml10:620  },
+  { s:163, name:"LATTAFA OUD MOOD",                       mz:6000,  half:3000,  ml10:620  },
+  { s:164, name:"LATTAFA RAMZ SILVER",                    mz:4000,  half:2000,  ml10:420  },
+  { s:165, name:"LATTAFA RAVE NOW",                       mz:4800,  half:2400,  ml10:500  },
+  { s:166, name:"LATTAFA VELVET OUD",                     mz:4600,  half:2300,  ml10:480  },
+  { s:167, name:"LATTAFA YARA",                           mz:3600,  half:1800,  ml10:380  },
+  { s:168, name:"LV AFTERNOON SWIM",                      mz:9000,  half:4500,  ml10:920  },
+  { s:169, name:"LV CITY OF STARS",                       mz:5600,  half:2800,  ml10:580  },
+  { s:170, name:"LV IMAGINATION",                         mz:6000,  half:3000,  ml10:620  },
+  { s:171, name:"LV IMAGINATION SPL",                     mz:12000, half:6000,  ml10:1220 },
+  { s:172, name:"LV OMBRE NOMADE",                        mz:6600,  half:3300,  ml10:680  },
+  { s:173, name:"MAGNET",                                 mz:3600,  half:1800,  ml10:380  },
+  { s:174, name:"MAISON CRIVELLI OUD MARACUJA",           mz:8000,  half:4000,  ml10:820  },
+  { s:175, name:"MAJMUA 100",                             mz:18000, half:9000,  ml10:1820 },
+  { s:176, name:"MAJMUA ECO (ONLY KG)",                   mz:1200,  half:600,   ml10:140  },
+  { s:177, name:"MANCERA AQUA WOOD",                      mz:6000,  half:3000,  ml10:620  },
+  { s:178, name:"MANCERA BLACK VANILLA",                  mz:3000,  half:1500,  ml10:320  },
+  { s:179, name:"MANCERA RED TOBACCO",                    mz:6800,  half:3400,  ml10:700  },
+  { s:180, name:"MANCERA RED TOBACCO PREMIUM",            mz:12000, half:6000,  ml10:1220 },
+  { s:181, name:"MARC ANTONIO BORIS GANYMEDE",            mz:10000, half:5000,  ml10:1020 },
+  { s:182, name:"MARJAAN MZ",                             mz:3000,  half:1500,  ml10:320  },
+  { s:183, name:"MFK BACCARAT ROUGE 540",                 mz:4000,  half:2000,  ml10:420  },
+  { s:184, name:"MFK OUD SATIN MOOD",                     mz:4200,  half:2100,  ml10:440  },
+  { s:185, name:"MFK OUD SATIN MOOD SPL",                 mz:6600,  half:3300,  ml10:680  },
+  { s:186, name:"MIXED FRUIT",                            mz:3200,  half:1600,  ml10:340  },
+  { s:187, name:"MONT BLANC EXPLORER",                    mz:4800,  half:2400,  ml10:500  },
+  { s:188, name:"MONT BLANC LEGEND",                      mz:4800,  half:2400,  ml10:500  },
+  { s:189, name:"MONTALE ARABIAN TONKA",                  mz:5200,  half:2600,  ml10:540  },
+  { s:190, name:"MONTALE HONEY AOUD",                     mz:7000,  half:3500,  ml10:720  },
+  { s:191, name:"MUSK AL GHAZAL (CREATION)",              mz:6400,  half:3200,  ml10:660  },
+  { s:192, name:"MUSK AL TAHARA JAMID WHITE",             mz:6000,  half:3000,  ml10:620  },
+  { s:193, name:"NASEEM MUSK SAFI",                       mz:17000, half:8500,  ml10:1720 },
+  { s:194, name:"NASEEM TYPE LAEQA",                      mz:3800,  half:1900,  ml10:400  },
+  { s:195, name:"NASEEM TYPE LAMSA",                      mz:3400,  half:1700,  ml10:360  },
+  { s:196, name:"OPEN",                                   mz:5800,  half:2900,  ml10:600  },
+  { s:197, name:"OUD COLLECTION",                         mz:6000,  half:3000,  ml10:620  },
+  { s:198, name:"OUD LAVENDAR",                           mz:7000,  half:3500,  ml10:720  },
+  { s:199, name:"OUD PREMIUM",                            mz:38000, half:19000, ml10:3820 },
+  { s:200, name:"OUD SENSATION (CREATION)",               mz:6200,  half:3100,  ml10:640  },
+  { s:201, name:"OUDH MZ (CREATION)",                     mz:5600,  half:2800,  ml10:580  },
+  { s:202, name:"PACO RABANNE BLACK XS",                  mz:3600,  half:1800,  ml10:380  },
+  { s:203, name:"PACO RABANNE INVICTUS",                  mz:4400,  half:2200,  ml10:460  },
+  { s:204, name:"PACO RABANNE INVICTUS AQUA",             mz:5600,  half:2800,  ml10:580  },
+  { s:205, name:"PACO RABANNE LADY MILLION",              mz:4800,  half:2400,  ml10:500  },
+  { s:206, name:"PACO RABANNE ONE MILLION",               mz:3800,  half:1900,  ml10:400  },
+  { s:207, name:"PACO RABANNE ONE MILLION ELIXIR",        mz:5000,  half:2500,  ml10:520  },
+  { s:208, name:"PACO RABANNE ONE MILLION LUCKY",         mz:4800,  half:2400,  ml10:500  },
+  { s:209, name:"PACO RABANNE PHANTOM",                   mz:6600,  half:3300,  ml10:680  },
+  { s:210, name:"PARLE BISCUIT",                          mz:1800,  half:900,   ml10:200  },
+  { s:211, name:"PATEL NECK",                             mz:5800,  half:2900,  ml10:600  },
+  { s:212, name:"PENHALIGONS THE BLAZING MR SAM",         mz:7200,  half:3600,  ml10:740  },
+  { s:213, name:"PUBERTY GOLD",                           mz:9000,  half:4500,  ml10:920  },
+  { s:214, name:"PUBERTY SPL",                            mz:22000, half:11000, ml10:2220 },
+  { s:215, name:"PURPLE OUD MZ",                          mz:7200,  half:3600,  ml10:740  },
+  { s:216, name:"RAJNIGANDHA FLOWER",                     mz:2000,  half:1000,  ml10:220  },
+  { s:217, name:"RALPH LAUREN POLO SPORTS",               mz:3200,  half:1600,  ml10:340  },
+  { s:218, name:"RASASI BLUE LADY",                       mz:2600,  half:1300,  ml10:280  },
+  { s:219, name:"RASASI DEHNAL OUD NOKHBA",               mz:12000, half:6000,  ml10:1220 },
+  { s:220, name:"RASASI ERGA MEN",                        mz:5000,  half:2500,  ml10:520  },
+  { s:221, name:"RASASI FATTAN",                          mz:4000,  half:2000,  ml10:420  },
+  { s:222, name:"RASASI HAWAS",                           mz:6200,  half:3100,  ml10:640  },
+  { s:223, name:"RASASI HAWAS BLACK",                     mz:10000, half:5000,  ml10:1020 },
+  { s:224, name:"RASASI HAWAS ELIXIR",                    mz:5000,  half:2500,  ml10:520  },
+  { s:225, name:"RASASI HAWAS FIRE",                      mz:10000, half:5000,  ml10:1020 },
+  { s:226, name:"RASASI HAWAS ICE",                       mz:6600,  half:3300,  ml10:680  },
+  { s:227, name:"RASASI HAWAS LONDON",                    mz:8400,  half:4200,  ml10:860  },
+  { s:228, name:"RASASI LA YUQAWAM POUR HOMME",           mz:4600,  half:2300,  ml10:480  },
+  { s:229, name:"RASASI ROYAL BLACK",                     mz:7200,  half:3600,  ml10:740  },
+  { s:230, name:"RED SPAIN",                              mz:3600,  half:1800,  ml10:380  },
+  { s:231, name:"REDBULL DRINK",                          mz:3000,  half:1500,  ml10:320  },
+  { s:232, name:"REEF 33",                                mz:12000, half:6000,  ml10:1220 },
+  { s:233, name:"RIIFFS BLEU ABSOLU",                     mz:5000,  half:2500,  ml10:520  },
+  { s:234, name:"RIIFFS IMPERIAL ROUGE",                  mz:4800,  half:2400,  ml10:500  },
+  { s:235, name:"RIIFFS LOVE'S WAY",                      mz:4800,  half:2400,  ml10:500  },
+  { s:236, name:"ROBERTO CAVALLI TIGER OUD",              mz:9200,  half:4600,  ml10:940  },
+  { s:237, name:"ROJA DOVE SWEETIE AOUD",                 mz:8000,  half:4000,  ml10:820  },
+  { s:238, name:"ROJA DOVE SWEETIE AOUD PREMIUM",         mz:12000, half:6000,  ml10:1220 },
+  { s:239, name:"ROMANCE",                                mz:2600,  half:1300,  ml10:280  },
+  { s:240, name:"ROSE (STRONG)",                          mz:3000,  half:1500,  ml10:320  },
+  { s:241, name:"ROYAL MIRAGE (BROWN)",                   mz:5000,  half:2500,  ml10:520  },
+  { s:242, name:"SABAH",                                  mz:3000,  half:1500,  ml10:320  },
+  { s:243, name:"SAFFRON TOBACCO",                        mz:6000,  half:3000,  ml10:620  },
+  { s:244, name:"SENSUAL",                                mz:3600,  half:1800,  ml10:380  },
+  { s:245, name:"SHL GOD OF FIRE",                        mz:6000,  half:3000,  ml10:620  },
+  { s:246, name:"SURRATI EHSAS AL ARABIA",                mz:5600,  half:2800,  ml10:580  },
+  { s:247, name:"SWEET HEART",                            mz:2600,  half:1300,  ml10:280  },
+  { s:248, name:"SWISS ARABIAN RASHEEQA",                 mz:4600,  half:2300,  ml10:480  },
+  { s:249, name:"SWISS ARABIAN SAPIL SOLID",              mz:4400,  half:2200,  ml10:460  },
+  { s:250, name:"SWISS ARABIAN SHAGAF OUD",               mz:6000,  half:3000,  ml10:620  },
+  { s:251, name:"SWISS ARABIAN TYPE JANNAT UL FIRDAUS SPL", mz:4800, half:2400, ml10:500  },
+  { s:252, name:"TERRE D HERMES",                         mz:4000,  half:2000,  ml10:420  },
+  { s:253, name:"TOMFORD LOST CHERRY",                    mz:3000,  half:1500,  ml10:320  },
+  { s:254, name:"TOMFORD OMBRE LEATHER",                  mz:5000,  half:2500,  ml10:520  },
+  { s:255, name:"TOMFORD OUD WOOD",                       mz:5400,  half:2700,  ml10:560  },
+  { s:256, name:"TOMFORD TOBACCO VANILLA",                mz:3800,  half:1900,  ml10:400  },
+  { s:257, name:"TOMFORD TUSCAN LEATHER",                 mz:4600,  half:2300,  ml10:480  },
+  { s:258, name:"VERSACE BRIGHT CRYSTAL",                 mz:3800,  half:1900,  ml10:400  },
+  { s:259, name:"VERSACE EROS",                           mz:4200,  half:2100,  ml10:440  },
+  { s:260, name:"VERSACE RED JEANS",                      mz:4000,  half:2000,  ml10:420  },
+  { s:261, name:"VICTORIA SECRET BOMBSHELL",              mz:2800,  half:1400,  ml10:300  },
+  { s:262, name:"VICTORIA SECRET PURE SEDUCTION",         mz:3000,  half:1500,  ml10:320  },
+  { s:263, name:"VIKTOR & ROLF SPICEBOMB",                mz:4800,  half:2400,  ml10:500  },
+  { s:264, name:"VILLAIN BLACK (CREATION)",               mz:4400,  half:2200,  ml10:460  },
+  { s:265, name:"WHITE LONDON",                           mz:2600,  half:1300,  ml10:280  },
+  { s:266, name:"WHITE MUSK",                             mz:2600,  half:1300,  ml10:280  },
+  { s:267, name:"WHITE OUD MZ",                           mz:7000,  half:3500,  ml10:720  },
+  { s:268, name:"WOODLAND (CREATION)",                    mz:19000, half:9500,  ml10:1920 },
+  { s:269, name:"WOODLAND SPL (CREATION)",                mz:28000, half:14000, ml10:2820 },
+  { s:270, name:"WOODY BY ARABIAN OUD",                   mz:10000, half:5000,  ml10:1020 },
+  { s:271, name:"XERJOFF ERBA PURA",                      mz:7000,  half:3500,  ml10:720  },
+  { s:272, name:"XERJOFF NAXOS",                          mz:5800,  half:2900,  ml10:600  },
+  { s:273, name:"XERJOFF NIO",                            mz:4000,  half:2000,  ml10:420  },
+  { s:274, name:"YARDLEY GENTLEMEN",                      mz:3600,  half:1800,  ml10:380  },
+  { s:275, name:"YSL BLACK OPIUM",                        mz:4400,  half:2200,  ml10:460  },
+  { s:276, name:"YSL CAFTAN",                             mz:8000,  half:4000,  ml10:820  },
+  { s:277, name:"YSL LIBRE WOMEN",                        mz:6400,  half:3200,  ml10:660  },
+  { s:278, name:"YSL Y",                                  mz:4400,  half:2200,  ml10:460  },
+  { s:279, name:"ZAM ZAM",                                mz:2800,  half:1400,  ml10:300  },
+  { s:280, name:"ZARA FRUITY",                            mz:4400,  half:2200,  ml10:460  },
+  { s:281, name:"ZARA GARDENIA",                          mz:4400,  half:2200,  ml10:460  },
+  { s:282, name:"ZARA LISBOA",                            mz:3400,  half:1700,  ml10:360  },
+  { s:283, name:"ZARA MAN UOMO",                          mz:3800,  half:1900,  ml10:400  },
+  { s:284, name:"ZARA ORCHID",                            mz:3000,  half:1500,  ml10:320  },
+  { s:285, name:"ZARA RED TEMPTATION",                    mz:4000,  half:2000,  ml10:420  },
+  { s:286, name:"ZARA SEOUL",                             mz:4400,  half:2200,  ml10:460  },
+  { s:287, name:"ZARA SUBLIME EPOQUE",                    mz:5000,  half:2500,  ml10:520  },
+  { s:288, name:"ZARA TOBACCO",                           mz:3800,  half:1900,  ml10:400  }
+];
+
+let priceListRows   = [];
+let priceListBuilt  = false;
+
+function openPriceList() {
+  const modal = document.getElementById("priceListModal");
+  if (!modal) return;
+
+  if (!priceListBuilt) buildPriceListTable();
+  modal.style.display = "flex";
+
+  const searchEl = document.getElementById("priceListSearch");
+  if (searchEl) {
+    searchEl.value = "";
+    filterPriceList("");
+    setTimeout(() => searchEl.focus(), 100);
+  }
+}
+
+function closePriceList() {
+  document.getElementById("priceListModal").style.display = "none";
+}
+
+function buildPriceListTable() {
+  const tbody = document.getElementById("priceListTbody");
+  if (!tbody) return;
+
+  const frag = document.createDocumentFragment();
+
+  MZ_PRICE_LIST.forEach(item => {
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.innerHTML = `
+      <td style="font-family:var(--font-serif);font-style:italic;color:var(--gold)">${item.s}</td>
+      <td class="col-name">${escapeHtml(item.name)}</td>
+      <td style="text-align:right;font-weight:600;color:var(--gold)">${formatRupees(item.mz)}</td>
+      <td style="text-align:right;color:var(--text2)">${formatRupees(item.half)}</td>
+      <td style="text-align:right;color:var(--text2)">${formatRupees(item.ml10)}</td>
+    `;
+    tr._search = item.name.toLowerCase();
+    tr.addEventListener("click", () => {
+      closePriceList();
+      setTimeout(() => openModal("frag"), 100);
+      setTimeout(() => {
+        const nameInput = document.querySelector('#modalBody [data-key="name"]');
+        if (nameInput) {
+          nameInput.value = item.name;
+          nameInput.focus();
+        }
+      }, 220);
+    });
+    frag.appendChild(tr);
+  });
+
+  tbody.innerHTML = "";
+  tbody.appendChild(frag);
+  priceListRows = Array.from(tbody.children);
+  priceListBuilt = true;
+  updatePriceCount(MZ_PRICE_LIST.length);
+}
+
+function filterPriceList(q) {
+  const ql = (q || "").trim().toLowerCase();
+  let visible = 0;
+
+  for (let i = 0; i < priceListRows.length; i++) {
+    const row = priceListRows[i];
+    const match = !ql || row._search.indexOf(ql) !== -1;
+    row.style.display = match ? "" : "none";
+    if (match) visible++;
+  }
+  updatePriceCount(visible);
+}
+
+function updatePriceCount(n) {
+  const el = document.getElementById("priceListCount");
+  if (el) el.textContent = `${n} fragrance${n === 1 ? "" : "s"}`;
+}
+
+/* ════════════════════════════════════════════════════════════
    EXPORT EXCEL
 ════════════════════════════════════════════════════════════ */
 function exportAllExcel() {
@@ -1329,27 +2070,31 @@ function exportAllExcel() {
   todoItems.forEach(t => todoRows.push([t.title||"", t.priority||"", t.dueDate||"", t.status||"", t.notes||"", t.createdBy||""]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(todoRows), "To-Do");
 
-  const bRows = [["Name","Brand","Size(ml)","Qty","Purchase Date","Notes"]];
-  bottles.forEach(b => bRows.push([b.name||"", b.brand||"", b.size||"", b.quantity||0, b.purchaseDate||"", b.notes||""]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bRows), "Bottles");
-
-  const tRows = [["Name","Brand","Qty","Location","Notes"]];
-  testers.forEach(t => tRows.push([t.name||"", t.brand||"", t.quantity||0, t.location||"", t.notes||""]));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tRows), "Testers");
-
   const cRows = [["Title","Category","Date","Description","By"]];
   changes.forEach(c => cRows.push([c.title||"", c.category||"", c.date||"", c.description||"", c.createdBy||""]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cRows), "Changes");
 
-  const fRows = [["Status","Name","Brand","Available ML","Quantity","Notes"]];
-  fragHave.forEach(f   => fRows.push(["HAVE",     f.name||"", f.brand||"", f.sizes||"", f.quantity||0, f.notes||""]));
-  fragAdd.forEach(f    => fRows.push(["TO ADD",   f.name||"", f.brand||"", f.sizes||"", f.quantity||0, f.notes||""]));
-  fragRemove.forEach(f => fRows.push(["TO REMOVE",f.name||"", f.brand||"", f.sizes||"", f.quantity||0, f.notes||""]));
+  const exRows = [["Title","Amount","Payment","Date","Priority","Status","Notes"]];
+  expenseItems.forEach(e => exRows.push([e.title||"", e.amount||0, e.payment||"", e.date||"", e.priority||"", e.status||"", e.notes||""]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(exRows), "Expenses");
+
+  const fRows = [["Status","Name","Brand","Available ML","Quantity","Purchase Date","Notes"]];
+  fragHave.forEach(f   => fRows.push(["HAVE",     f.name||"", f.brand||"", f.sizes||"", f.quantity||0, f.purchaseDate||"", f.notes||""]));
+  fragAdd.forEach(f    => fRows.push(["TO ADD",   f.name||"", f.brand||"", f.sizes||"", f.quantity||0, f.purchaseDate||"", f.notes||""]));
+  fragRemove.forEach(f => fRows.push(["TO REMOVE",f.name||"", f.brand||"", f.sizes||"", f.quantity||0, f.purchaseDate||"", f.notes||""]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fRows), "Fragrances");
 
-  const eRows = [["Name","Available (formatted)","Available (ml)","Notes"]];
-  ethonolItems.forEach(e => eRows.push([e.name||"", formatMl(e.ml||0), Number(e.ml)||0, e.notes||""]));
+  const eRows = [["Name","Available (formatted)","Available (ml)","Purchase Date","Notes"]];
+  ethonolItems.forEach(e => eRows.push([e.name||"", formatMl(e.ml||0), Number(e.ml)||0, e.purchaseDate||"", e.notes||""]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(eRows), "Ethanol");
+
+  const bRows = [["Name","Brand","Size(ml)","Qty","Purchase Date","Notes"]];
+  bottles.forEach(b => bRows.push([b.name||"", b.brand||"", b.size||"", b.quantity||0, b.purchaseDate||"", b.notes||""]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bRows), "Bottles");
+
+  const tRows = [["Name","Brand","Qty","Purchase Date","Location","Notes"]];
+  testers.forEach(t => tRows.push([t.name||"", t.brand||"", t.quantity||0, t.purchaseDate||"", t.location||"", t.notes||""]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tRows), "Testers");
 
   XLSX.writeFile(wb, "LUXORA_UPDATES.xlsx");
   showToast("Excel exported ✅", "success");
@@ -1517,14 +2262,29 @@ function cselectScroll(e) {
    EMAIL NOTIFICATIONS
 ════════════════════════════════════════════════════════════ */
 const COLLECTION_LABELS = {
-  todo_items:      "To-Do List",
-  perfume_bottles: "Perfume Bottles",
-  testers:         "Testers",
-  new_changes:     "New Changes",
-  frag_have:       "Fragrances - We Have",
-  frag_add:        "Fragrances - To Add",
-  frag_remove:     "Fragrances - To Remove",
-  ethonol_items:   "Ethanol"
+  todo_items:        "To-Do List",
+  new_changes:       "New Changes",
+  expenses_items:    "Expenses",
+  frag_have:         "Fragrances - We Have",
+  frag_add:          "Fragrances - To Add",
+  frag_remove:       "Fragrances - To Remove",
+  ethonol_items:     "Ethanol",
+  perfume_bottles:   "Perfume Bottles",
+  testers:           "Testers",
+  boxes_testers:     "Boxes - Testers",
+  boxes_20ml:        "Boxes - 20 ml",
+  boxes_50ml:        "Boxes - 50 ml",
+  boxes_100ml:       "Boxes - 100 ml",
+  boxes_combo:       "Boxes - Combo",
+  labels_testers:    "Labels - Testers",
+  labels_20ml:       "Labels - 20 ml",
+  labels_50ml:       "Labels - 50 ml",
+  labels_100ml:      "Labels - 100 ml",
+  labels_card:       "Labels - Thank You Card",
+  labels_sticker:    "Labels - Sticker",
+  packaging_bubble:  "Packaging - Bubble Roll",
+  packaging_bag:     "Packaging - Packing Bag",
+  packaging_paper:   "Packaging - Paper Hand Bag"
 };
 
 const FIELD_LABELS = {
@@ -1532,11 +2292,13 @@ const FIELD_LABELS = {
   status: "Status", notes: "Notes", brand: "Brand", size: "Size (ml)",
   quantity: "Quantity", purchaseDate: "Purchase Date", location: "Location",
   category: "Category", date: "Date", description: "Description",
-  sizes: "Available ML", ml: "Available (ml)", image: "Image"
+  sizes: "Available ML", ml: "Available (ml)", image: "Image",
+  amount: "Amount", payment: "Payment Mode"
 };
 
 const NOTIFY_SKIP_KEYS = new Set([
-  "id", "_init", "_createdAt", "createdAt", "createdBy", "updatedAt", "updatedBy", "fragTab"
+  "id","_init","_createdAt","createdAt","createdBy","updatedAt","updatedBy",
+  "fragTab","boxTab","labelTab","packagingTab"
 ]);
 
 function itemLabel(x) {
@@ -1545,9 +2307,18 @@ function itemLabel(x) {
 
 function findItemByCollection(col, id) {
   const map = {
-    todo_items: todoItems, perfume_bottles: bottles, testers: testers,
-    new_changes: changes, frag_have: fragHave, frag_add: fragAdd,
-    frag_remove: fragRemove, ethonol_items: ethonolItems
+    todo_items: todoItems,
+    new_changes: changes,
+    expenses_items: expenseItems,
+    frag_have: fragHave, frag_add: fragAdd, frag_remove: fragRemove,
+    ethonol_items: ethonolItems,
+    perfume_bottles: bottles,
+    testers: testers,
+    boxes_testers: boxItems, boxes_20ml: boxItems, boxes_50ml: boxItems,
+    boxes_100ml: boxItems, boxes_combo: boxItems,
+    labels_testers: labelItems, labels_20ml: labelItems, labels_50ml: labelItems,
+    labels_100ml: labelItems, labels_card: labelItems, labels_sticker: labelItems,
+    packaging_bubble: packagingItems, packaging_bag: packagingItems, packaging_paper: packagingItems
   };
   return (map[col] || []).find(x => x.id === id) || null;
 }
@@ -1657,6 +2428,9 @@ window.switchView             = switchView;
 window.toggleSidebar          = toggleSidebar;
 window.closeSidebar           = closeSidebar;
 window.switchFragTab          = switchFragTab;
+window.switchBoxTab           = switchBoxTab;
+window.switchLabelTab         = switchLabelTab;
+window.switchPackagingTab     = switchPackagingTab;
 
 window.openModal              = openModal;
 window.closeModal             = closeModal;
@@ -1686,11 +2460,19 @@ window.confirmDelete          = confirmDelete;
 window.openLightbox           = openLightbox;
 window.closeLightbox          = closeLightbox;
 window.exportAllExcel         = exportAllExcel;
+window.deleteImageFromGitHub  = deleteImageFromGitHub;
+
+window.openPriceList          = openPriceList;
+window.closePriceList         = closePriceList;
+window.filterPriceList        = filterPriceList;
 
 window.renderTodo             = renderTodo;
-window.renderBottles          = renderBottles;
-window.renderTesters          = renderTesters;
 window.renderChanges          = renderChanges;
+window.renderExpenses         = renderExpenses;
 window.renderFrags            = renderFrags;
 window.renderEthonol          = renderEthonol;
-window.deleteImageFromGitHub  = deleteImageFromGitHub;
+window.renderBottles          = renderBottles;
+window.renderTesters          = renderTesters;
+window.renderBoxes            = renderBoxes;
+window.renderLabels           = renderLabels;
+window.renderPackaging        = renderPackaging;
