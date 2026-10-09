@@ -31,19 +31,37 @@ let db, collection, getDocs, doc, setDoc, deleteDoc, addDoc,
     onSnapshot, query, orderBy, getDoc, updateDoc;
 
 /* ───────── APP STATE ───────── */
-let todoItems       = [];
-let changes         = [];
-let expenseItems    = [];
-let fragHave        = [];
-let fragAdd         = [];
-let fragRemove      = [];
-let ethonolItems    = [];
-let bottles         = [];
-let testers         = [];
-let boxItems        = [];
-let labelItems      = [];
-let packagingItems  = [];
+let todoItems    = [];
+let changes      = [];
+let expenseItems = [];
+let fragHave     = [];
+let fragAdd      = [];
+let fragRemove   = [];
+let ethonolItems = [];
+let bottles      = [];
+let testers      = [];
 
+/* Boxes — one array per sub-tab */
+let boxTesters = [];
+let box20ml    = [];
+let box50ml    = [];
+let box100ml   = [];
+let boxCombo   = [];
+
+/* Labels — one array per sub-tab */
+let labelTesters = [];
+let label20ml    = [];
+let label50ml    = [];
+let label100ml   = [];
+let labelCard    = [];
+let labelSticker = [];
+
+/* Packaging — one array per sub-tab */
+let packBubble = [];
+let packBag    = [];
+let packPaper  = [];
+
+/* Sub-tab state */
 let currentFragTab      = "have";
 let currentBoxTab       = "testers";
 let currentLabelTab     = "testers";
@@ -246,6 +264,8 @@ async function initCollections() {
 
 /* ════════════════════════════════════════════════════════════
    REALTIME LISTENERS
+   Each Firestore collection writes to its OWN array so nothing
+   gets overwritten when multiple sub-tabs exist.
 ════════════════════════════════════════════════════════════ */
 const unsubs = {};
 
@@ -275,20 +295,23 @@ function setupRealtimeListeners() {
   bind("ethonol_items",    v => ethonolItems   = v, renderEthonol);
   bind("perfume_bottles",  v => bottles        = v, renderBottles);
   bind("testers",          v => testers        = v, renderTesters);
-  bind("boxes_testers",    v => boxItems       = v, renderBoxes);
-  bind("boxes_20ml",       v => boxItems       = v, renderBoxes);
-  bind("boxes_50ml",       v => boxItems       = v, renderBoxes);
-  bind("boxes_100ml",      v => boxItems       = v, renderBoxes);
-  bind("boxes_combo",      v => boxItems       = v, renderBoxes);
-  bind("labels_testers",   v => labelItems     = v, renderLabels);
-  bind("labels_20ml",      v => labelItems     = v, renderLabels);
-  bind("labels_50ml",      v => labelItems     = v, renderLabels);
-  bind("labels_100ml",     v => labelItems     = v, renderLabels);
-  bind("labels_card",      v => labelItems     = v, renderLabels);
-  bind("labels_sticker",   v => labelItems     = v, renderLabels);
-  bind("packaging_bubble", v => packagingItems = v, renderPackaging);
-  bind("packaging_bag",    v => packagingItems = v, renderPackaging);
-  bind("packaging_paper",  v => packagingItems = v, renderPackaging);
+
+  bind("boxes_testers",    v => boxTesters     = v, renderBoxes);
+  bind("boxes_20ml",       v => box20ml        = v, renderBoxes);
+  bind("boxes_50ml",       v => box50ml        = v, renderBoxes);
+  bind("boxes_100ml",      v => box100ml       = v, renderBoxes);
+  bind("boxes_combo",      v => boxCombo       = v, renderBoxes);
+
+  bind("labels_testers",   v => labelTesters   = v, renderLabels);
+  bind("labels_20ml",      v => label20ml      = v, renderLabels);
+  bind("labels_50ml",      v => label50ml      = v, renderLabels);
+  bind("labels_100ml",     v => label100ml     = v, renderLabels);
+  bind("labels_card",      v => labelCard      = v, renderLabels);
+  bind("labels_sticker",   v => labelSticker   = v, renderLabels);
+
+  bind("packaging_bubble", v => packBubble     = v, renderPackaging);
+  bind("packaging_bag",    v => packBag        = v, renderPackaging);
+  bind("packaging_paper",  v => packPaper      = v, renderPackaging);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -817,7 +840,7 @@ async function renderExpenses() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — FRAGRANCES (with Purchase Date)
+   RENDER — FRAGRANCES
 ════════════════════════════════════════════════════════════ */
 function switchFragTab(tab, el) {
   currentFragTab = tab;
@@ -881,7 +904,7 @@ function fragCollection(tab) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — ETHANOL (with Purchase Date)
+   RENDER — ETHANOL
 ════════════════════════════════════════════════════════════ */
 async function renderEthonol() {
   const grid = document.getElementById("ethonolGrid");
@@ -971,7 +994,7 @@ async function renderBottles() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — TESTERS (with Purchase Date)
+   RENDER — TESTERS
 ════════════════════════════════════════════════════════════ */
 async function renderTesters() {
   const grid = document.getElementById("testerGrid");
@@ -1016,7 +1039,7 @@ async function renderTesters() {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — BOXES
+   RENDER — BOXES (per-tab array)
 ════════════════════════════════════════════════════════════ */
 function switchBoxTab(tab, el) {
   currentBoxTab = tab;
@@ -1028,9 +1051,20 @@ function switchBoxTab(tab, el) {
 async function renderBoxes() {
   const grid = document.getElementById("boxGrid");
   if (!grid) return;
+
   const q = (document.getElementById("boxSearch")?.value || "").toLowerCase();
   const col = boxCollectionForTab(currentBoxTab);
-  const list = boxItems.filter(b => !q || (b.name||"").toLowerCase().includes(q));
+
+  const sourceMap = {
+    testers: boxTesters,
+    "20ml":  box20ml,
+    "50ml":  box50ml,
+    "100ml": box100ml,
+    combo:   boxCombo
+  };
+  const list = (sourceMap[currentBoxTab] || []).filter(b =>
+    !q || (b.name||"").toLowerCase().includes(q)
+  );
 
   grid.innerHTML = "";
   if (list.length === 0) {
@@ -1075,7 +1109,7 @@ function boxCollectionForTab(tab) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — LABELS
+   RENDER — LABELS (per-tab array)
 ════════════════════════════════════════════════════════════ */
 function switchLabelTab(tab, el) {
   currentLabelTab = tab;
@@ -1087,9 +1121,21 @@ function switchLabelTab(tab, el) {
 async function renderLabels() {
   const grid = document.getElementById("labelGrid");
   if (!grid) return;
+
   const q = (document.getElementById("labelSearch")?.value || "").toLowerCase();
   const col = labelCollectionForTab(currentLabelTab);
-  const list = labelItems.filter(l => !q || (l.name||"").toLowerCase().includes(q));
+
+  const sourceMap = {
+    testers: labelTesters,
+    "20ml":  label20ml,
+    "50ml":  label50ml,
+    "100ml": label100ml,
+    card:    labelCard,
+    sticker: labelSticker
+  };
+  const list = (sourceMap[currentLabelTab] || []).filter(l =>
+    !q || (l.name||"").toLowerCase().includes(q)
+  );
 
   grid.innerHTML = "";
   if (list.length === 0) {
@@ -1135,7 +1181,7 @@ function labelCollectionForTab(tab) {
 }
 
 /* ════════════════════════════════════════════════════════════
-   RENDER — PACKAGING
+   RENDER — PACKAGING (per-tab array)
 ════════════════════════════════════════════════════════════ */
 function switchPackagingTab(tab, el) {
   currentPackagingTab = tab;
@@ -1147,9 +1193,18 @@ function switchPackagingTab(tab, el) {
 async function renderPackaging() {
   const grid = document.getElementById("packagingGrid");
   if (!grid) return;
+
   const q = (document.getElementById("packagingSearch")?.value || "").toLowerCase();
   const col = packagingCollectionForTab(currentPackagingTab);
-  const list = packagingItems.filter(p => !q || (p.name||"").toLowerCase().includes(q));
+
+  const sourceMap = {
+    bubble: packBubble,
+    bag:    packBag,
+    paper:  packPaper
+  };
+  const list = (sourceMap[currentPackagingTab] || []).filter(p =>
+    !q || (p.name||"").toLowerCase().includes(q)
+  );
 
   grid.innerHTML = "";
   if (list.length === 0) {
@@ -2314,11 +2369,11 @@ function findItemByCollection(col, id) {
     ethonol_items: ethonolItems,
     perfume_bottles: bottles,
     testers: testers,
-    boxes_testers: boxItems, boxes_20ml: boxItems, boxes_50ml: boxItems,
-    boxes_100ml: boxItems, boxes_combo: boxItems,
-    labels_testers: labelItems, labels_20ml: labelItems, labels_50ml: labelItems,
-    labels_100ml: labelItems, labels_card: labelItems, labels_sticker: labelItems,
-    packaging_bubble: packagingItems, packaging_bag: packagingItems, packaging_paper: packagingItems
+    boxes_testers: boxTesters, boxes_20ml: box20ml, boxes_50ml: box50ml,
+    boxes_100ml: box100ml, boxes_combo: boxCombo,
+    labels_testers: labelTesters, labels_20ml: label20ml, labels_50ml: label50ml,
+    labels_100ml: label100ml, labels_card: labelCard, labels_sticker: labelSticker,
+    packaging_bubble: packBubble, packaging_bag: packBag, packaging_paper: packPaper
   };
   return (map[col] || []).find(x => x.id === id) || null;
 }
