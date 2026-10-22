@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#f8f6f2" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>Luxora Updates</title>
+  <link rel="icon" href="icon.png" />
+  <link rel="apple-touch-icon" href="icon.png" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- LOGIN SCREEN -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-bg">
+      <div class="login-orb orb1"></div>
+      <div class="login-orb orb2"></div>
+      <div class="login-orb orb3"></div>
+    </div>
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="logo.png" alt="Luxora" onerror="this.style.display='none'" />
+      </div>
+      <h2 class="login-title">Luxora Updates</h2>
+      <p class="login-sub">Sign in to manage updates</p>
+      <div class="login-form">
+        <div class="input-group">
+          <label>Email Address</label>
+          <input type="email" id="loginEmail" class="login-input" placeholder="your@email.com"
+                 autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </div>
+        <div class="input-group">
+          <label>Password</label>
+          <div class="pw-wrap">
+            <input type="password" id="loginPassword" class="login-input" placeholder="Enter password"
+                   autocomplete="current-password" />
+            <button class="pw-toggle" onclick="togglePw()" type="button" aria-label="Toggle password">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="login-error" id="loginError"></div>
+        <button class="login-btn" onclick="attemptLogin()">Sign In</button>
+      </div>
+      <p class="login-note">Access restricted to authorized partners only</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- ONE-TIME GITHUB SETUP SCREEN -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="setupScreen" class="login-screen" style="display:none">
+    <div class="login-bg">
+      <div class="login-orb orb1"></div>
+      <div class="login-orb orb2"></div>
+      <div class="login-orb orb3"></div>
+    </div>
+    <div class="login-card" style="max-width:520px">
+      <div class="login-logo">
+        <img src="logo.png" alt="Luxora" onerror="this.style.display='none'" />
+      </div>
+      <h2 class="login-title">One-Time Setup</h2>
+      <p class="login-sub">Connect your GitHub repo for image uploads. This only runs once.</p>
+      <div class="login-form">
+        <div class="input-group">
+          <label>GitHub Token (PAT)</label>
+          <input type="password" id="setupToken" class="login-input" placeholder="github_pat_..." autocomplete="off" />
+        </div>
+        <div class="input-group">
+          <label>GitHub Username</label>
+          <input type="text" id="setupOwner" class="login-input" placeholder="e.g. tirthmewada06"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </div>
+        <div class="input-group">
+          <label>Repository Name</label>
+          <input type="text" id="setupRepo" class="login-input" placeholder="luxora-updates" value="luxora-updates"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </div>
+        <div class="input-group">
+          <label>Branch</label>
+          <input type="text" id="setupBranch" class="login-input" placeholder="main" value="main"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </div>
+        <div class="input-group">
+          <label>Base Path (folder inside repo)</label>
+          <input type="text" id="setupBasePath" class="login-input" placeholder="uploads" value="uploads"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </div>
+        <div class="login-error" id="setupError"></div>
+        <button class="login-btn" onclick="saveGithubSetup()">Save & Continue →</button>
+      </div>
+      <p class="login-note">Token is stored in Firestore config/github and used only by the app</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- MAIN APP -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="app" class="app" style="display:none">
+
+    <!-- TOP BAR -->
+    <header class="mobile-topbar">
+      <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="Menu"><span></span><span></span><span></span></button>
+      <div class="mobile-logo">
+        <img src="logo.png" alt="Luxora" onerror="this.style.display='none'" />
+      </div>
+      <nav class="topbar-nav">
+        <a class="topbar-nav-link active" data-view="todo"     onclick="switchView('todo',this)">To-Do</a>
+        <a class="topbar-nav-link"        data-view="changes"  onclick="switchView('changes',this)">New Changes</a>
+        <a class="topbar-nav-link"        data-view="expenses" onclick="switchView('expenses',this)">Expenses</a>
+      </nav>
+      <button class="mobile-user-btn" onclick="logout()" title="Sign out" aria-label="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      </button>
+    </header>
+
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="logo.png" alt="Luxora" onerror="this.style.display='none'" />
+          <div>
+            <div class="sidebar-brand">LUXORA</div>
+            <div class="sidebar-sub">Updates</div>
+          </div>
+        </div>
+        <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">✕</button>
+      </div>
+
+      <div class="sidebar-stats">
+        <div class="ss-item">
+          <span class="ss-val" id="statTodo">—</span>
+          <span class="ss-label">Tasks</span>
+        </div>
+        <div class="ss-divider"></div>
+        <div class="ss-item">
+          <span class="ss-val" id="statBottles">—</span>
+          <span class="ss-label">Bottles</span>
+        </div>
+        <div class="ss-divider"></div>
+        <div class="ss-item">
+          <span class="ss-val" id="statFrags">—</span>
+          <span class="ss-label">Frags</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-group-label">WORKSPACE</div>
+        <a class="nav-item active" data-view="todo" onclick="switchView('todo',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          To-Do List
+        </a>
+        <a class="nav-item" data-view="changes" onclick="switchView('changes',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </div>
+          New Changes
+        </a>
+        <a class="nav-item" data-view="expenses" onclick="switchView('expenses',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>
+          </div>
+          Expenses
+        </a>
+
+        <div class="nav-group-label">CATALOG</div>
+        <a class="nav-item" data-view="fragrances" onclick="switchView('fragrances',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>
+          </div>
+          Fragrances
+        </a>
+        <a class="nav-item" data-view="ethonol" onclick="switchView('ethonol',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6v5l3 4v8a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-8l3-4z"/><path d="M9 8h6"/></svg>
+          </div>
+          Ethanol
+        </a>
+        <a class="nav-item" data-view="bottles" onclick="switchView('bottles',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2h6v4l2 3v11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9l2-3z"/></svg>
+          </div>
+          Perfume Bottles
+        </a>
+        <a class="nav-item" data-view="testers" onclick="switchView('testers',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 2h10l-2 6v13a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V8z"/></svg>
+          </div>
+          Testers
+        </a>
+        <a class="nav-item" data-view="boxes" onclick="switchView('boxes',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          </div>
+          Boxes
+        </a>
+        <a class="nav-item" data-view="labels" onclick="switchView('labels',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          </div>
+          Labels
+        </a>
+        <a class="nav-item" data-view="packaging" onclick="switchView('packaging',this)">
+          <div class="nav-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          </div>
+          Packaging
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user-info" id="sidebarUser"></div>
+        <button class="export-btn" onclick="exportAllExcel()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export Excel
+        </button>
+        <button class="logout-btn" onclick="logout()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          Sign Out
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <!-- ════════════ TO-DO ════════════ -->
+      <section class="view active" id="view-todo">
+        <div class="page-header">
+          <h1 class="page-title">To-Do List</h1>
+          <p class="page-sub">Track tasks and follow-ups</p>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('todo')">＋ Add Task</button>
+          <select id="todoFilter" class="month-filter-select" onchange="renderTodo()">
+            <option value="">All Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="DONE">Done</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Image</th><th>Title</th><th>Priority</th><th>Due</th><th>Status</th><th>Notes</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="todoTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ════════════ CHANGES ════════════ -->
+      <section class="view" id="view-changes">
+        <div class="page-header">
+          <h1 class="page-title">New Changes</h1>
+          <p class="page-sub">Log of new additions and changes</p>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('change')">＋ Add Change</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="changeSearch" placeholder="Search…" oninput="renderChanges()" />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th><th>Image</th><th>Title</th><th>Category</th><th>Date</th><th>Description</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="changeTbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ════════════ EXPENSES ════════════ -->
+      <section class="view" id="view-expenses">
+        <div class="page-header">
+          <h1 class="page-title">Expenses</h1>
+          <p class="page-sub">Track all business expenses & receipts</p>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('expense')">＋ Add Expense</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="expenseSearch" placeholder="Search…" oninput="renderExpenses()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="expenseGrid"></div>
+      </section>
+
+      <!-- ════════════ FRAGRANCES ════════════ -->
+      <section class="view" id="view-fragrances">
+        <div class="page-header">
+          <h1 class="page-title">Fragrances</h1>
+          <p class="page-sub">Have · To Add · To Remove</p>
+        </div>
+        <div class="size-selector" style="margin-bottom:18px">
+          <button class="size-chip active" data-tab="have"   onclick="switchFragTab('have',this)">📦 We Have</button>
+          <button class="size-chip"        data-tab="add"    onclick="switchFragTab('add',this)">🟢 To Add</button>
+          <button class="size-chip"        data-tab="remove" onclick="switchFragTab('remove',this)">🔴 To Remove</button>
+          <button class="size-chip"        onclick="openPriceList()">📋 List</button>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('frag')">＋ Add Fragrance</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="fragSearch" placeholder="Search…" oninput="renderFrags()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="fragGridUpdates"></div>
+      </section>
+
+      <!-- ════════════ ETHANOL ════════════ -->
+      <section class="view" id="view-ethonol">
+        <div class="page-header">
+          <h1 class="page-title">Ethanol</h1>
+          <p class="page-sub">Track your ethanol stock & usage</p>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('ethonol')">＋ Add Ethanol</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="ethonolSearch" placeholder="Search…" oninput="renderEthonol()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="ethonolGrid"></div>
+      </section>
+
+      <!-- ════════════ BOTTLES ════════════ -->
+      <section class="view" id="view-bottles">
+        <div class="page-header">
+          <h1 class="page-title">Perfume Bottles</h1>
+          <p class="page-sub">Full bottle inventory & notes</p>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('bottle')">＋ Add Bottle</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="bottleSearch" placeholder="Search…" oninput="renderBottles()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="bottleGrid"></div>
+      </section>
+
+      <!-- ════════════ TESTERS ════════════ -->
+      <section class="view" id="view-testers">
+        <div class="page-header">
+          <h1 class="page-title">Testers</h1>
+          <p class="page-sub">Tester stock & tracking</p>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('tester')">＋ Add Tester</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="testerSearch" placeholder="Search…" oninput="renderTesters()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="testerGrid"></div>
+      </section>
+
+      <!-- ════════════ BOXES ════════════ -->
+      <section class="view" id="view-boxes">
+        <div class="page-header">
+          <h1 class="page-title">Boxes</h1>
+          <p class="page-sub">Box inventory by type</p>
+        </div>
+        <div class="size-selector" style="margin-bottom:18px">
+          <button class="size-chip active" data-tab="testers" onclick="switchBoxTab('testers',this)">Testers</button>
+          <button class="size-chip"        data-tab="20ml"    onclick="switchBoxTab('20ml',this)">20 ml</button>
+          <button class="size-chip"        data-tab="50ml"    onclick="switchBoxTab('50ml',this)">50 ml</button>
+          <button class="size-chip"        data-tab="100ml"   onclick="switchBoxTab('100ml',this)">100 ml</button>
+          <button class="size-chip"        data-tab="combo"   onclick="switchBoxTab('combo',this)">Combo Box</button>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('box')">＋ Add Box</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="boxSearch" placeholder="Search…" oninput="renderBoxes()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="boxGrid"></div>
+      </section>
+
+      <!-- ════════════ LABELS ════════════ -->
+      <section class="view" id="view-labels">
+        <div class="page-header">
+          <h1 class="page-title">Labels</h1>
+          <p class="page-sub">Label inventory by type</p>
+        </div>
+        <div class="size-selector" style="margin-bottom:18px">
+          <button class="size-chip active" data-tab="testers" onclick="switchLabelTab('testers',this)">Testers</button>
+          <button class="size-chip"        data-tab="20ml"    onclick="switchLabelTab('20ml',this)">20 ml</button>
+          <button class="size-chip"        data-tab="50ml"    onclick="switchLabelTab('50ml',this)">50 ml</button>
+          <button class="size-chip"        data-tab="100ml"   onclick="switchLabelTab('100ml',this)">100 ml</button>
+          <button class="size-chip"        data-tab="card"    onclick="switchLabelTab('card',this)">Thank You Card</button>
+          <button class="size-chip"        data-tab="sticker" onclick="switchLabelTab('sticker',this)">Sticker</button>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('label')">＋ Add Label</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="labelSearch" placeholder="Search…" oninput="renderLabels()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="labelGrid"></div>
+      </section>
+
+      <!-- ════════════ PACKAGING ════════════ -->
+      <section class="view" id="view-packaging">
+        <div class="page-header">
+          <h1 class="page-title">Packaging</h1>
+          <p class="page-sub">Packing supplies inventory</p>
+        </div>
+        <div class="size-selector" style="margin-bottom:18px">
+          <button class="size-chip active" data-tab="bubble" onclick="switchPackagingTab('bubble',this)">Bubble Roll</button>
+          <button class="size-chip"        data-tab="bag"    onclick="switchPackagingTab('bag',this)">Packing Bag</button>
+          <button class="size-chip"        data-tab="paper"  onclick="switchPackagingTab('paper',this)">Paper Hand Bag</button>
+        </div>
+        <div class="cust-toolbar">
+          <button class="toolbar-btn refresh-btn" onclick="openModal('packaging')">＋ Add Item</button>
+          <div class="search-box" style="max-width:280px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" id="packagingSearch" placeholder="Search…" oninput="renderPackaging()" />
+          </div>
+        </div>
+        <div class="frag-grid" id="packagingGrid"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- GENERIC MODAL -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="genericModal" class="edit-modal-overlay" style="display:none">
+    <div class="edit-modal-card" style="max-width:560px">
+      <div class="edit-modal-header">
+        <span id="modalTitle">Add Item</span>
+        <button class="edit-modal-close" onclick="closeModal()" aria-label="Close">✕</button>
+      </div>
+      <div class="edit-modal-body" id="modalBody"></div>
+      <div class="edit-modal-footer">
+        <button class="edit-cancel-btn" onclick="closeModal()">Cancel</button>
+        <button class="edit-save-btn" id="modalSaveBtn" onclick="saveModal()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- AMOUNT MODAL -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="amountModal" class="edit-modal-overlay" style="display:none">
+    <div class="edit-modal-card" style="max-width:420px">
+      <div class="edit-modal-header">
+        <span id="amountModalTitle">Adjust Amount</span>
+        <button class="edit-modal-close" onclick="closeAmountModal()" aria-label="Close">✕</button>
+      </div>
+      <div class="edit-modal-body">
+        <div id="amountModalSub" style="font-size:0.82rem;color:var(--text3);margin-bottom:8px"></div>
+        <div class="edit-row">
+          <label id="amountModalLabel">Amount</label>
+          <div class="qty-control">
+            <button class="qty-btn" type="button" onclick="amountModalChangeQty(-1)">−</button>
+            <input type="number" id="amountModalInput" value="1" min="1" inputmode="numeric" />
+            <button class="qty-btn" type="button" onclick="amountModalChangeQty(1)">+</button>
+          </div>
+        </div>
+        <div id="amountModalPreview" style="font-family:var(--font-serif);font-style:italic;font-size:1.1rem;color:var(--gold);text-align:center;margin-top:6px"></div>
+      </div>
+      <div class="edit-modal-footer">
+        <button class="edit-cancel-btn" onclick="closeAmountModal()">Cancel</button>
+        <button class="edit-save-btn" id="amountModalConfirm" onclick="confirmAmountModal()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- DATE PICKER MODAL -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="datePickerModal" class="edit-modal-overlay" style="display:none">
+    <div class="edit-modal-card" style="max-width:380px">
+      <div class="edit-modal-header">
+        <span id="datePickerTitle">Select Date</span>
+        <button class="edit-modal-close" onclick="closeDatePicker()" aria-label="Close">✕</button>
+      </div>
+      <div class="edit-modal-body">
+        <div class="date-picker-nav">
+          <button type="button" class="date-nav-btn" onclick="datePickerPrevMonth()" aria-label="Previous month">‹</button>
+          <div class="date-picker-month" id="datePickerMonth">October 2026</div>
+          <button type="button" class="date-nav-btn" onclick="datePickerNextMonth()" aria-label="Next month">›</button>
+        </div>
+        <div class="date-picker-weekdays">
+          <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+        </div>
+        <div class="date-picker-grid" id="datePickerGrid"></div>
+        <div class="date-picker-footer">
+          <button type="button" class="toolbar-btn" onclick="datePickerToday()">Today</button>
+          <button type="button" class="toolbar-btn clear-btn" onclick="datePickerClear()">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- CONFIRM MODAL -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="confirmModal" class="edit-modal-overlay" style="display:none">
+    <div class="edit-modal-card" style="max-width:400px">
+      <div class="edit-modal-header">
+        <span id="confirmModalTitle">Are you sure?</span>
+        <button class="edit-modal-close" onclick="closeConfirmModal()" aria-label="Close">✕</button>
+      </div>
+      <div class="edit-modal-body">
+        <p id="confirmModalMessage" style="font-size:0.9rem;color:var(--text2);line-height:1.5;text-align:center;padding:8px 0"></p>
+      </div>
+      <div class="edit-modal-footer">
+        <button class="edit-cancel-btn" onclick="closeConfirmModal()">Cancel</button>
+        <button class="edit-save-btn" id="confirmModalConfirm" onclick="confirmConfirmModal()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- PRICE LIST MODAL -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="priceListModal" class="edit-modal-overlay" style="display:none">
+    <div class="edit-modal-card" style="max-width:920px; width:95vw;">
+      <div class="edit-modal-header">
+        <span id="priceListTitle">MZ Aromas — Price List</span>
+        <button class="edit-modal-close" onclick="closePriceList()" aria-label="Close">✕</button>
+      </div>
+      <div class="edit-modal-body" style="padding:16px 20px; gap:12px;">
+
+        <div class="search-box" style="max-width:100%;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input type="text" id="priceListSearch"
+                 placeholder="Search fragrance…"
+                 oninput="filterPriceList(this.value)" autocomplete="off"
+                 autocapitalize="off" autocorrect="off" spellcheck="false" />
+        </div>
+
+        <div id="priceListCount"
+             style="font-size:0.72rem;color:var(--text3);text-align:right;margin-top:-4px;"></div>
+
+        <div class="price-list-scroll">
+          <table class="data-table price-list-table">
+            <thead>
+              <tr>
+                <th style="width:64px;">SR.NO.</th>
+                <th>PRODUCTS</th>
+                <th style="width:100px;text-align:right;">1 KG</th>
+                <th style="width:110px;text-align:right;">500 GMS</th>
+                <th style="width:110px;text-align:right;">100 GMS</th>
+              </tr>
+            </thead>
+            <tbody id="priceListTbody"></tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- IMAGE LIGHTBOX -->
+  <!-- ══════════════════════════════════════════ -->
+  <div id="imgLightbox" class="edit-modal-overlay" style="display:none" onclick="closeLightbox()">
+    <img id="lightboxImg" src="" alt="Preview" />
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- FIREBASE SDK -->
+  <!-- ══════════════════════════════════════════ -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import {
+      getFirestore, collection, getDocs, doc, setDoc, deleteDoc,
+      addDoc, onSnapshot, query, orderBy, getDoc, updateDoc
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDJT7lf51uOPjYH_mES_caoNShbm4x99VA",
+      authDomain: "luxora-updates.firebaseapp.com",
+      projectId: "luxora-updates",
+      storageBucket: "luxora-updates.firebasestorage.app",
+      messagingSenderId: "100765645470",
+      appId: "1:100765645470:web:0872549c1b1eca01df198f",
+      measurementId: "G-4SX55EVSSY"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getFirestore(app);
+
+    window.firebaseDB            = db;
+    window.firebaseCollection    = collection;
+    window.firebaseGetDocs       = getDocs;
+    window.firebaseDoc           = doc;
+    window.firebaseSetDoc        = setDoc;
+    window.firebaseDeleteDoc     = deleteDoc;
+    window.firebaseAddDoc        = addDoc;
+    window.firebaseOnSnapshot    = onSnapshot;
+    window.firebaseQuery         = query;
+    window.firebaseOrderBy       = orderBy;
+    window.firebaseGetDoc        = getDoc;
+    window.firebaseUpdateDoc     = updateDoc;
+    window.firebaseInitialized   = true;
+
+    window.dispatchEvent(new Event("firebase-ready"));
+  </script>
+
+  <script src="script.js"></script>
+</body>
+</html>
