@@ -908,7 +908,7 @@ async function renderFrags() {
     card.innerHTML = `
       ${src
         ? `<img class="frag-card-img" src="${src}" onclick="openLightbox('${src}')" />`
-        : `<div class="frag-card-emoji">🧴</div>`}
+        : `<div class="frag-card-emoji">⚱💨</div>`}
       <div class="frag-card-name">${escapeHtml(f.name || "Unnamed")}</div>
       <div style="font-size:0.68rem;color:var(--text3)">${escapeHtml(f.brand||"")}${f.sizes ? " · "+f.sizes : ""}</div>
       <div class="frag-stock-pill ${badgeColor}">${badgeLabel} · Qty: ${qty}</div>
