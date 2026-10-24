@@ -74,10 +74,11 @@ const statsCache = { todo: null, bottles: null, frags: null };
 let statsSyncTimer = null;
 
 /* ───────── MODAL STATE ───────── */
-let modalSection   = null;
-let modalEditId    = null;
-let modalImageUrl  = "";
-let modalUploading = false;
+let modalSection         = null;
+let modalEditId          = null;
+let modalImageUrl        = "";
+let modalUploading       = false;
+let modalSourceCollection = null;   /* remembers original collection for moves */
 
 /* ───────── AMOUNT MODAL STATE ───────── */
 let amountModalCtx  = null;
@@ -1321,9 +1322,10 @@ function confirmDelete(colName, id, label = "item") {
    MODAL — OPEN
 ════════════════════════════════════════════════════════════ */
 async function openModal(section, id = null) {
-  modalSection  = section;
-  modalEditId   = id;
-  modalImageUrl = "";
+  modalSection          = section;
+  modalEditId           = id;
+  modalImageUrl         = "";
+  modalSourceCollection = null;
 
   const titleEl = document.getElementById("modalTitle");
   const bodyEl  = document.getElementById("modalBody");
@@ -1335,7 +1337,10 @@ async function openModal(section, id = null) {
   if (id) {
     const col = collectionForSection(section);
     const snap = await getDoc(doc(db, col, id));
-    if (snap.exists()) currentItem = { id, ...snap.data() };
+    if (snap.exists()) {
+      currentItem = { id, ...snap.data() };
+      modalSourceCollection = col;   /* remember original collection for moves */
+    }
   }
 
   if (section === "todo") {
@@ -1378,13 +1383,15 @@ async function openModal(section, id = null) {
       { key: "purchaseDate", label: "Purchase Date", type: "date",     value: currentItem?.purchaseDate || "" },
       { key: "notes",        label: "Notes",         type: "textarea", value: currentItem?.notes || "" },
     ];
-    if (!id) {
-      fields.unshift({
-        key: "fragTab", label: "Add To *", type: "select",
-        value: currentFragTab, options: ["have","add","remove"],
-        optionLabels: { have: "📦 We Have", add: "🟢 To Add", remove: "🔴 To Remove" }
-      });
-    }
+    /* Category dropdown: always shown (add AND edit). On edit, pre-selected to current tab. */
+    const currentTabValue = id
+      ? (modalSourceCollection === "frag_add" ? "add" : modalSourceCollection === "frag_remove" ? "remove" : "have")
+      : currentFragTab;
+    fields.unshift({
+      key: "fragTab", label: "Category *", type: "select",
+      value: currentTabValue, options: ["have","add","remove"],
+      optionLabels: { have: "📦 We Have", add: "🟢 To Add", remove: "🔴 To Remove" }
+    });
   } else if (section === "ethonol") {
     titleText = id ? "Edit Ethanol" : "Add Ethanol";
     fields = [
@@ -1777,10 +1784,17 @@ async function saveModal() {
   data.image = modalImageUrl || "";
 
   let targetCollection = collectionForSection(modalSection);
+  let isMove           = false;
+  let moveFrom         = null;
 
   if (modalSection === "frag" && data.fragTab) {
     targetCollection = fragCollection(data.fragTab);
     delete data.fragTab;
+
+    if (modalEditId && modalSourceCollection && modalSourceCollection !== targetCollection) {
+      isMove   = true;
+      moveFrom = modalSourceCollection;
+    }
   } else if (modalSection === "box" && data.boxTab) {
     targetCollection = boxCollectionForTab(data.boxTab);
     delete data.boxTab;
@@ -1816,11 +1830,52 @@ async function saveModal() {
         }
       }
 
-      await setDoc(doc(db, targetCollection, modalEditId), data, { merge: true });
-      showToast("Saved ✅", "success");
-      const changed = diffFields(before, data);
-      if (changed.length) {
-        notifyChange({ collection: targetCollection, action: "edited", item: itemLabel(data), changes: changed });
+      if (isMove) {
+        /* ───── TRUE MOVE: write into new collection, then delete from old ───── */
+        // Preserve createdAt from the source doc so display order stays intact.
+        let srcData = {};
+        try {
+          const srcSnap = await getDoc(doc(db, moveFrom, modalEditId));
+          if (srcSnap.exists()) srcData = srcSnap.data();
+        } catch (_) {}
+
+        const moveData = { ...srcData, ...data, image: data.image };
+        // Keep original createdAt; only updatedAt is refreshed
+        if (srcData.createdAt) moveData.createdAt = srcData.createdAt;
+        if (srcData.createdBy) moveData.createdBy = srcData.createdBy;
+
+        // 1. Write to new collection (same doc id)
+        await setDoc(doc(db, targetCollection, modalEditId), moveData, { merge: false });
+
+        // 2. Delete from old collection (with rollback if it fails)
+        try {
+          await deleteDoc(doc(db, moveFrom, modalEditId));
+        } catch (delErr) {
+          console.error("Move: delete-from-source failed, rolling back new copy", delErr);
+          try { await deleteDoc(doc(db, targetCollection, modalEditId)); } catch (_) {}
+          throw delErr;
+        }
+
+        const fromLabel = COLLECTION_LABELS[moveFrom]          || moveFrom;
+        const toLabel   = COLLECTION_LABELS[targetCollection]  || targetCollection;
+
+        showToast(`Moved to ${toLabel.replace("Fragrances - ", "")} ✅`, "success");
+        notifyChange({
+          collection: targetCollection,
+          action:     "moved",
+          item:       itemLabel(moveData),
+          details: [
+            { label: "From", value: fromLabel },
+            { label: "To",   value: toLabel   }
+          ]
+        });
+      } else {
+        await setDoc(doc(db, targetCollection, modalEditId), data, { merge: true });
+        showToast("Saved ✅", "success");
+        const changed = diffFields(before, data);
+        if (changed.length) {
+          notifyChange({ collection: targetCollection, action: "edited", item: itemLabel(data), changes: changed });
+        }
       }
     } else {
       await addDoc(collection(db, targetCollection), data);
@@ -1837,9 +1892,10 @@ async function saveModal() {
 function closeModal() {
   document.getElementById("genericModal").style.display = "none";
   document.getElementById("modalBody").innerHTML = "";
-  modalSection = null;
-  modalEditId  = null;
-  modalImageUrl = "";
+  modalSection          = null;
+  modalEditId           = null;
+  modalImageUrl         = "";
+  modalSourceCollection = null;
 }
 
 /* ════════════════════════════════════════════════════════════
