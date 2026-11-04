@@ -280,6 +280,21 @@ async function pushStatsCache() {
 }
 
 /* ════════════════════════════════════════════════════════════
+   SORT HELPERS
+   Default display order: name → title → createdAt
+════════════════════════════════════════════════════════════ */
+function sortByName(arr) {
+  return arr.sort((a, b) => {
+    const an = String(a.name || a.title || "").trim();
+    const bn = String(b.name || b.title || "").trim();
+    if (an || bn) {
+      return an.localeCompare(bn, undefined, { sensitivity: "base", numeric: true });
+    }
+    return (a.createdAt || 0) - (b.createdAt || 0);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
    REALTIME LISTENERS — bind only what the active view needs,
    and never re-bind a collection already being watched.
 ════════════════════════════════════════════════════════════ */
@@ -294,7 +309,7 @@ function bind(colName, setter, renderFn, opts = {}) {
       if (data._init) return;
       arr.push({ id: d.id, ...data });
     });
-    arr.sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    sortByName(arr);
     setter(arr);
     renderFn();
     renderStats();
@@ -895,9 +910,15 @@ async function renderFrags() {
 
   const list = sourceMap[currentFragTab] || [];
   const q = (document.getElementById("fragSearch")?.value || "").toLowerCase();
-  const filtered = list.filter(f =>
-    !q || (f.name||"").toLowerCase().includes(q) || (f.brand||"").toLowerCase().includes(q)
-  );
+
+  // Filter + sort A→Z by fragrance name (case-insensitive)
+  const filtered = list
+    .filter(f =>
+      !q || (f.name||"").toLowerCase().includes(q) || (f.brand||"").toLowerCase().includes(q)
+    )
+    .sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base", numeric: true })
+    );
 
   grid.innerHTML = "";
   if (filtered.length === 0) {
